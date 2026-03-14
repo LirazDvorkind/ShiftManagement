@@ -82,6 +82,9 @@ export const api = {
   getRoom: (id: string) =>
     fetcher<RoomDetail>(`/rooms/${id}`),
 
+  deleteRoom: (id: string) =>
+    fetcher<{ message: string }>(`/rooms/${id}`, { method: 'DELETE' }),
+
   joinRoom: (id: string) =>
     fetcher<RoomMember>(`/rooms/${id}/join`, { method: 'POST' }),
 

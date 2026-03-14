@@ -468,10 +468,21 @@ async function getSchedule(req, res, next) {
   }
 }
 
+async function deleteRoom(req, res, next) {
+  const roomId = req.roomId;
+  try {
+    await prisma.room.delete({ where: { id: roomId } });
+    return res.status(200).json({ message: "Room deleted." });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createRoom,
   getRoom,
   joinRoom,
+  deleteRoom,
   addMemberByName,
   updateMemberRole,
   removeMember,

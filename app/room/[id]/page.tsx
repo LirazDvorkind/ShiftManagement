@@ -205,6 +205,7 @@ export default function RoomPage() {
               timeBlocks={schedule?.time_blocks ?? []}
               members={members}
               onRefresh={fetchData}
+              onRoomDeleted={() => router.replace('/')}
             />
           </section>
         )}

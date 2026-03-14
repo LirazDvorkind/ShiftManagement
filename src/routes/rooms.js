@@ -27,6 +27,7 @@ const {
   createRoom,
   getRoom,
   joinRoom,
+  deleteRoom,
   addMemberByName,
   updateMemberRole,
   removeMember,
@@ -62,6 +63,7 @@ router.use("/:id", requireRoomMember, memberRouter);
 
 memberRouter.get("/", getRoom);
 memberRouter.get("/schedule", getSchedule);
+memberRouter.delete("/", requireRoomAdmin, deleteRoom);
 
 // ---------------------------------------------------------------------------
 // Admin-only sub-routes

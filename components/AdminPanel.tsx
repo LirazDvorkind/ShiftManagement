@@ -15,6 +15,7 @@ interface AdminPanelProps {
   timeBlocks: TimeBlock[];
   members: RoomMember[];
   onRefresh: () => void;
+  onRoomDeleted: () => void;
 }
 
 type BtnState = 'idle' | 'loading' | 'success';
@@ -93,7 +94,7 @@ function isValidDisplayDate(display: string): boolean {
 
 // --- Component ---
 
-export default function AdminPanel({ roomId, currentUserId, locations, timeBlocks, members, onRefresh }: AdminPanelProps) {
+export default function AdminPanel({ roomId, currentUserId, locations, timeBlocks, members, onRefresh, onRoomDeleted }: AdminPanelProps) {
   const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
   const sortedTimeBlocks = [...timeBlocks].sort((a, b) => a.name.localeCompare(b.name));
   const sortedMembers = [...members].sort((a, b) => (a.user?.name ?? '').localeCompare(b.user?.name ?? ''));
@@ -255,6 +256,22 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
       onRefresh();
     } catch (err: any) {
       setMemberActionErr(err.message || 'Failed to demote user. Please try again.');
+    }
+  };
+
+  const [deleteRoomErr, setDeleteRoomErr] = useState('');
+  const [deletingRoom, setDeletingRoom] = useState(false);
+
+  const handleDeleteRoom = async () => {
+    if (!confirm('Delete this room? All locations, time blocks, shifts, and members will be permanently removed.')) return;
+    setDeleteRoomErr('');
+    setDeletingRoom(true);
+    try {
+      await api.deleteRoom(roomId);
+      onRoomDeleted();
+    } catch (err: any) {
+      setDeleteRoomErr(err.message || 'Failed to delete room. Please try again.');
+      setDeletingRoom(false);
     }
   };
 
@@ -517,6 +534,26 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
             <InlineError message={memberErr} />
           </div>
         )}
+      </section>
+
+      {/* Danger Zone */}
+      <section className="bg-white p-4 rounded-lg shadow-sm border border-red-100">
+        <h3 className="text-sm font-semibold text-red-500 uppercase tracking-wider mb-3">Danger Zone</h3>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-800">Delete this room</p>
+            <p className="text-xs text-gray-500 mt-0.5">Permanently removes all locations, time blocks, shifts, and members.</p>
+          </div>
+          <button
+            onClick={handleDeleteRoom}
+            disabled={deletingRoom}
+            className="shrink-0 flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-md transition-colors disabled:opacity-50"
+          >
+            {deletingRoom ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            Delete Room
+          </button>
+        </div>
+        <InlineError message={deleteRoomErr} />
       </section>
     </div>
   );

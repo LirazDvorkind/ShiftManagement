@@ -3,7 +3,7 @@ import { Providers } from './providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ShiftManager',
+  title: 'Shift Manager',
   description: "Effortlessly organize your team's shifts in shared rooms.",
 };
 

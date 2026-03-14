@@ -57,7 +57,7 @@ function LoginForm() {
           <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-100 rounded-full mb-3">
             <Calendar className="w-7 h-7 text-blue-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ShiftManager</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Shift Manager</h1>
           <p className="mt-1 text-gray-500 text-sm">Enter your name to continue</p>
         </div>
 
