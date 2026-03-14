@@ -591,13 +591,15 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
                           Revoke Admin
                         </button>
                       )}
-                      <button
-                        onClick={() => { setEditing({ type: 'member', id: member.user_id, value: member.user?.name || '' }); setRenameErr(''); }}
-                        className="text-gray-300 hover:text-indigo-500 transition-colors p-1 rounded"
-                        title="Rename"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      {!isSelf && (
+                        <button
+                          onClick={() => { setEditing({ type: 'member', id: member.user_id, value: member.user?.name || '' }); setRenameErr(''); }}
+                          className="text-gray-300 hover:text-indigo-500 transition-colors p-1 rounded"
+                          title="Rename"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {!isSelf && (
                         <button
                           onClick={() => handleRemoveMember(member.user_id, member.user?.name || 'this person')}

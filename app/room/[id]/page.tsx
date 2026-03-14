@@ -167,6 +167,9 @@ export default function RoomPage() {
                 </span>
               </div>
 
+              <span className="text-sm text-gray-600 hidden sm:block">
+                Signed in as <span className="font-medium text-gray-900">{user?.name}</span>
+              </span>
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors px-3 py-1.5 rounded-lg"
