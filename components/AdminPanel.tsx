@@ -127,7 +127,8 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
   // Member form
   const [newMemberName, setNewMemberName] = useState('');
   const [memberErr, setMemberErr] = useState('');
-  const [promoteErr, setPromoteErr] = useState('');
+  const [memberSuccess, setMemberSuccess] = useState('');
+  const [memberActionErr, setMemberActionErr] = useState('');
 
   // --- Handlers ---
 
@@ -215,14 +216,18 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMemberName.trim()) return;
+    const name = newMemberName.trim();
+    if (!name) return;
     setMemberErr('');
+    setMemberSuccess('');
     memberBtn.load();
     try {
-      await api.addMember(roomId, newMemberName.trim());
+      await api.addMember(roomId, name);
       setNewMemberName('');
       onRefresh();
       memberBtn.succeed();
+      setMemberSuccess(`${name} has been added to the room.`);
+      setTimeout(() => setMemberSuccess(''), 4000);
     } catch (err: any) {
       memberBtn.idle();
       setMemberErr(err.message || 'Failed to add person. Please try again.');
@@ -230,12 +235,33 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
   };
 
   const handlePromote = async (userId: string) => {
-    setPromoteErr('');
+    setMemberActionErr('');
     try {
       await api.updateMemberRole(roomId, userId, 'ADMIN');
       onRefresh();
     } catch (err: any) {
-      setPromoteErr(err.message || 'Failed to promote user. Please try again.');
+      setMemberActionErr(err.message || 'Failed to promote user. Please try again.');
+    }
+  };
+
+  const handleDemote = async (userId: string) => {
+    setMemberActionErr('');
+    try {
+      await api.updateMemberRole(roomId, userId, 'PARTICIPANT');
+      onRefresh();
+    } catch (err: any) {
+      setMemberActionErr(err.message || 'Failed to demote user. Please try again.');
+    }
+  };
+
+  const handleRemoveMember = async (userId: string, name: string) => {
+    if (!confirm(`Remove ${name} from this room?`)) return;
+    setMemberActionErr('');
+    try {
+      await api.removeMember(roomId, userId);
+      onRefresh();
+    } catch (err: any) {
+      setMemberActionErr(err.message || 'Failed to remove member. Please try again.');
     }
   };
 
@@ -417,26 +443,43 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center">
           <Users className="w-4 h-4 mr-1" /> People
         </h3>
-        {promoteErr && (
+        {memberActionErr && (
           <div className="mb-3">
-            <InlineError message={promoteErr} />
+            <InlineError message={memberActionErr} />
           </div>
         )}
         <div className="divide-y divide-gray-100 mb-4">
           {members.map(member => (
-            <div key={member.user_id} className="py-3 flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-900">{member.user?.name || 'Anonymous'}</p>
+            <div key={member.user_id} className="py-3 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900 truncate">{member.user?.name || 'Anonymous'}</p>
                 <p className="text-xs text-gray-500 uppercase">{member.role}</p>
               </div>
-              {member.role === 'PARTICIPANT' && (
+              <div className="flex items-center gap-1 shrink-0">
+                {member.role === 'PARTICIPANT' && (
+                  <button
+                    onClick={() => handlePromote(member.user_id)}
+                    className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded transition-colors"
+                  >
+                    Make Admin
+                  </button>
+                )}
+                {member.role === 'ADMIN' && (
+                  <button
+                    onClick={() => handleDemote(member.user_id)}
+                    className="text-xs px-2 py-1 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded transition-colors"
+                  >
+                    Revoke Admin
+                  </button>
+                )}
                 <button
-                  onClick={() => handlePromote(member.user_id)}
-                  className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded transition-colors"
+                  onClick={() => handleRemoveMember(member.user_id, member.user?.name || 'this person')}
+                  className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
+                  title="Remove from room"
                 >
-                  Make Admin
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
-              )}
+              </div>
             </div>
           ))}
         </div>
@@ -446,11 +489,17 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
             className="flex-1 px-3 py-2 border rounded-md text-sm"
             placeholder="Add person by name…"
             value={newMemberName}
-            onChange={e => { setNewMemberName(e.target.value); setMemberErr(''); }}
+            onChange={e => { setNewMemberName(e.target.value); setMemberErr(''); setMemberSuccess(''); }}
           />
           <ActionButton state={memberBtn.state} idleContent={<Plus className="w-4 h-4" />} />
         </form>
         <p className="text-xs text-gray-400 mt-1.5">Creates an account if the person hasn't registered yet.</p>
+        {memberSuccess && (
+          <div className="mt-2 flex items-center gap-1.5 px-3 py-2 bg-green-50 border border-green-200 rounded-md">
+            <Check className="w-3.5 h-3.5 text-green-600 shrink-0" />
+            <p className="text-xs text-green-700">{memberSuccess}</p>
+          </div>
+        )}
         {memberErr && (
           <div className="mt-2">
             <InlineError message={memberErr} />

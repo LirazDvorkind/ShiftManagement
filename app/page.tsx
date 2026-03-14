@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { PlusCircle, Calendar, LogOut, Loader2 } from 'lucide-react';
+import { PlusCircle, Calendar, LogOut, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -19,6 +19,7 @@ export default function LandingPage() {
 
   const [roomNumber, setRoomNumber] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState('');
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -39,11 +40,12 @@ export default function LandingPage() {
     const n = parseInt(roomNumber, 10);
     if (!n || n < 1) return;
     setCreating(true);
+    setCreateErr('');
     try {
       const room = await api.createRoom(n);
       router.push(`/room/${room.number}`);
     } catch (err: any) {
-      alert(err.message || 'Error. Please try again.');
+      setCreateErr(err.message || 'Something went wrong. Please try again.');
       setCreating(false);
     }
   }
@@ -98,6 +100,12 @@ export default function LandingPage() {
             <p className="text-xs text-gray-400 mt-1">Enter a number to join an existing room, or create it if it doesn&apos;t exist yet.</p>
           </div>
 
+          {createErr && (
+            <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-600">{createErr}</p>
+            </div>
+          )}
           <button
             type="submit"
             disabled={creating || !roomNumber}

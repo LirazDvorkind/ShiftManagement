@@ -44,15 +44,14 @@ function weekdayName(dateStr: string): string {
   return d.toLocaleDateString('en-IL', { weekday: 'long', timeZone: TZ });
 }
 
-/** Get Monday of the week containing `date`, anchored to Israel time */
+/** Get Sunday of the week containing `date`, anchored to Israel time */
 function getWeekStart(date: Date): Date {
   // Get Israel's current date string, then build a local midnight from it
   const israelDateStr = date.toLocaleDateString('en-CA', { timeZone: TZ }); // "YYYY-MM-DD"
   const [year, month, day] = israelDateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
   const dow = d.getDay(); // 0=Sun, 1=Mon ...
-  const diff = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() - dow); // roll back to Sunday
   return d;
 }
 

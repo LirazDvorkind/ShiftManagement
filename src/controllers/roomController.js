@@ -158,12 +158,8 @@ async function joinRoom(req, res, next) {
       return res.status(200).json({ message: "Already a member.", member: mapMember(existing) });
     }
 
-    const member = await prisma.roomMember.create({
-      data: { roomId, userId, role: "PARTICIPANT" },
-      include: { user: { select: { id: true, name: true } } },
-    });
-
-    return res.status(201).json(mapMember(member));
+    // Only pre-added members may join — self-join is not allowed.
+    return res.status(403).json({ error: "You have not been added to this room. Ask an admin to add you." });
   } catch (err) {
     next(err);
   }
@@ -293,6 +289,11 @@ async function addLocation(req, res, next) {
   const { name } = req.body;
 
   try {
+    const existing = await prisma.shiftLocation.findFirst({ where: { roomId, name } });
+    if (existing) {
+      return res.status(409).json({ error: `A location named "${name}" already exists.` });
+    }
+
     const location = await prisma.shiftLocation.create({ data: { roomId, name } });
     return res.status(201).json(mapLocation(location));
   } catch (err) {
@@ -328,6 +329,11 @@ async function addTimeBlock(req, res, next) {
   const { name, start_time: startTime, end_time: endTime } = req.body;
 
   try {
+    const existing = await prisma.timeBlock.findFirst({ where: { roomId, name } });
+    if (existing) {
+      return res.status(409).json({ error: `A time block named "${name}" already exists.` });
+    }
+
     const timeBlock = await prisma.timeBlock.create({
       data: { roomId, name, startTime, endTime },
     });

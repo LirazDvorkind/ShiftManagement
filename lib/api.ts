@@ -83,6 +83,9 @@ export const api = {
       body: JSON.stringify({ role }),
     }),
 
+  removeMember: (roomId: string, userId: string) =>
+    fetcher<{ message: string }>(`/rooms/${roomId}/members/${userId}`, { method: 'DELETE' }),
+
   addLocation: (roomId: string, name: string) =>
     fetcher<ShiftLocation>(`/rooms/${roomId}/locations`, {
       method: 'POST',

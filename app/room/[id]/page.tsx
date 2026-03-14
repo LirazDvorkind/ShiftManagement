@@ -82,20 +82,6 @@ export default function RoomPage() {
     }
   }, [authLoading, user, fetchData]);
 
-  const [joinError, setJoinError] = useState('');
-
-  async function handleJoin() {
-    setLoading(true);
-    setJoinError('');
-    try {
-      await api.joinRoom(id);
-      await fetchData();
-    } catch (err: any) {
-      setJoinError(err.message || 'Failed to join room. Please try again.');
-      setLoading(false);
-    }
-  }
-
   function handleCopyLink() {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
@@ -137,24 +123,10 @@ export default function RoomPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-6">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center space-y-6">
           <ShieldAlert className="w-16 h-16 text-amber-500 mx-auto" />
-          <h1 className="text-2xl font-bold text-gray-900">Join this Room</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Access Restricted</h1>
           <p className="text-gray-600">
-            You are not a member of this room. Join now to see the shift schedule.
+            You are not a member of this room. Ask a room admin to add you by name.
           </p>
-          {joinError && (
-            <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-left">
-              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-red-600">{joinError}</p>
-            </div>
-          )}
-          <button
-            onClick={handleJoin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-lg shadow-lg transition-colors"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            Join Room
-          </button>
           <Link href="/" className="block text-sm text-gray-400 hover:underline">
             Back to home
           </Link>
