@@ -94,6 +94,12 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  renameMember: (roomId: string, userId: string, name: string) =>
+    fetcher<{ user_id: string; name: string }>(`/rooms/${roomId}/members/${userId}/name`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+
   updateMemberRole: (roomId: string, userId: string, role: UserRole) =>
     fetcher<RoomMember>(`/rooms/${roomId}/members/${userId}/role`, {
       method: 'PUT',
@@ -109,6 +115,12 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
+  renameLocation: (roomId: string, locationId: string, name: string) =>
+    fetcher<ShiftLocation>(`/rooms/${roomId}/locations/${locationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    }),
+
   removeLocation: (roomId: string, locationId: string) =>
     fetcher<{ message: string }>(`/rooms/${roomId}/locations/${locationId}`, {
       method: 'DELETE',
@@ -118,6 +130,12 @@ export const api = {
     fetcher<TimeBlock>(`/rooms/${roomId}/time-blocks`, {
       method: 'POST',
       body: JSON.stringify({ name, start_time: startTime, end_time: endTime }),
+    }),
+
+  renameTimeBlock: (roomId: string, blockId: string, name: string) =>
+    fetcher<TimeBlock>(`/rooms/${roomId}/time-blocks/${blockId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
     }),
 
   removeTimeBlock: (roomId: string, blockId: string) =>

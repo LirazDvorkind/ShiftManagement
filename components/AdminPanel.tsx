@@ -6,7 +6,7 @@
 import { useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { ShiftLocation, TimeBlock, RoomMember } from '@/types';
-import { MapPin, Clock, UserPlus, ShieldCheck, Trash2, Plus, Users, Calendar, Check, Loader2, AlertCircle } from 'lucide-react';
+import { MapPin, Clock, UserPlus, ShieldCheck, Trash2, Plus, Users, Calendar, Check, Loader2, AlertCircle, Pencil, X } from 'lucide-react';
 
 interface AdminPanelProps {
   roomId: string;
@@ -135,7 +135,43 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
   const [memberSuccess, setMemberSuccess] = useState('');
   const [memberActionErr, setMemberActionErr] = useState('');
 
+  // Inline rename
+  const [editing, setEditing] = useState<{ type: 'location' | 'block' | 'member'; id: string; value: string } | null>(null);
+  const [renameErr, setRenameErr] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+
   // --- Handlers ---
+
+  const handleRename = async () => {
+    if (!editing) return;
+    const name = editing.value.trim();
+    if (!name) return;
+    setRenameErr('');
+    setRenameSaving(true);
+    try {
+      if (editing.type === 'location') {
+        await api.renameLocation(roomId, editing.id, name);
+      } else if (editing.type === 'block') {
+        await api.renameTimeBlock(roomId, editing.id, name);
+      } else {
+        const duplicate = members.some(
+          m => m.user_id !== editing.id && (m.user?.name ?? '').toLowerCase() === name.toLowerCase()
+        );
+        if (duplicate) {
+          setRenameErr(`A person named "${name}" is already in this room.`);
+          setRenameSaving(false);
+          return;
+        }
+        await api.renameMember(roomId, editing.id, name);
+      }
+      setEditing(null);
+      onRefresh();
+    } catch (err: any) {
+      setRenameErr(err.message || 'Failed to rename. Please try again.');
+    } finally {
+      setRenameSaving(false);
+    }
+  };
 
   const handleAddLocation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -310,15 +346,31 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
           <ul className="divide-y divide-gray-100">
             {sortedLocations.length === 0 && <li className="text-xs text-gray-400 italic py-1">No locations yet</li>}
             {sortedLocations.map(loc => (
-              <li key={loc.id} className="flex items-center justify-between py-1.5">
-                <span className="text-sm text-gray-800">{loc.name}</span>
-                <button
-                  onClick={() => handleRemoveLocation(loc.id)}
-                  className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
-                  title="Remove location"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+              <li key={loc.id} className="py-1.5">
+                {editing?.type === 'location' && editing.id === loc.id ? (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        className="flex-1 px-2 py-1 border rounded text-sm"
+                        value={editing.value}
+                        onChange={e => { setEditing({ ...editing, value: e.target.value }); setRenameErr(''); }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditing(null); }}
+                      />
+                      <button onClick={handleRename} disabled={renameSaving} className="p-1 text-green-600 hover:text-green-700" title="Save"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setEditing(null); setRenameErr(''); }} className="p-1 text-gray-400 hover:text-gray-600" title="Cancel"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    {renameErr && <p className="text-[11px] text-red-500">{renameErr}</p>}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-800">{loc.name}</span>
+                    <div className="flex items-center gap-0.5">
+                      <button onClick={() => { setEditing({ type: 'location', id: loc.id, value: loc.name }); setRenameErr(''); }} className="text-gray-300 hover:text-indigo-500 transition-colors p-1 rounded" title="Rename"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleRemoveLocation(loc.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded" title="Remove"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -338,23 +390,39 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
         {/* Time Blocks */}
         <section className="bg-white p-4 rounded-lg shadow-sm space-y-3">
           <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center">
-            <Clock className="w-4 h-4 mr-1" /> Time Blocks
+            <Clock className="w-4 h-4 mr-1" /> Time Slots
           </h3>
           <ul className="divide-y divide-gray-100">
-            {sortedTimeBlocks.length === 0 && <li className="text-xs text-gray-400 italic py-1">No time blocks yet</li>}
+            {sortedTimeBlocks.length === 0 && <li className="text-xs text-gray-400 italic py-1">No time slots yet</li>}
             {sortedTimeBlocks.map(block => (
-              <li key={block.id} className="flex items-center justify-between py-1.5">
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{block.name}</p>
-                  <p className="text-xs text-gray-400">{block.start_time} – {block.end_time}</p>
-                </div>
-                <button
-                  onClick={() => handleRemoveTimeBlock(block.id)}
-                  className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
-                  title="Remove time block"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+              <li key={block.id} className="py-1.5">
+                {editing?.type === 'block' && editing.id === block.id ? (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        className="flex-1 px-2 py-1 border rounded text-sm"
+                        value={editing.value}
+                        onChange={e => { setEditing({ ...editing, value: e.target.value }); setRenameErr(''); }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditing(null); }}
+                      />
+                      <button onClick={handleRename} disabled={renameSaving} className="p-1 text-green-600 hover:text-green-700" title="Save"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setEditing(null); setRenameErr(''); }} className="p-1 text-gray-400 hover:text-gray-600" title="Cancel"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    {renameErr && <p className="text-[11px] text-red-500">{renameErr}</p>}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{block.name}</p>
+                      <p className="text-xs text-gray-400">{block.start_time} – {block.end_time}</p>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      <button onClick={() => { setEditing({ type: 'block', id: block.id, value: block.name }); setRenameErr(''); }} className="text-gray-300 hover:text-indigo-500 transition-colors p-1 rounded" title="Rename"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleRemoveTimeBlock(block.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded" title="Remove time slot"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -396,7 +464,7 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
             </div>
             <ActionButton
               state={blockBtn.state}
-              idleContent={<><Plus className="w-4 h-4" /> Add Time Block</>}
+              idleContent={<><Plus className="w-4 h-4" /> Add Time Slot</>}
               fullWidth
             />
           </form>
@@ -479,42 +547,69 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
         <div className="divide-y divide-gray-100 mb-4">
           {sortedMembers.map(member => {
             const isSelf = member.user_id === currentUserId;
+            const isEditingMember = editing?.type === 'member' && editing.id === member.user_id;
             return (
-              <div key={member.user_id} className="py-3 flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 truncate">
-                    {member.user?.name || 'Anonymous'}
-                    {isSelf && <span className="ml-1.5 text-xs text-gray-400 font-normal">(you)</span>}
-                  </p>
-                  <p className="text-xs text-gray-500 uppercase">{member.role}</p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {member.role === 'PARTICIPANT' && (
-                    <button
-                      onClick={() => handlePromote(member.user_id)}
-                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded transition-colors"
-                    >
-                      Make Admin
-                    </button>
-                  )}
-                  {member.role === 'ADMIN' && !isSelf && (
-                    <button
-                      onClick={() => handleDemote(member.user_id)}
-                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded transition-colors"
-                    >
-                      Revoke Admin
-                    </button>
-                  )}
-                  {!isSelf && (
-                    <button
-                      onClick={() => handleRemoveMember(member.user_id, member.user?.name || 'this person')}
-                      className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
-                      title="Remove from room"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+              <div key={member.user_id} className="py-3">
+                {isEditingMember ? (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1">
+                      <input
+                        autoFocus
+                        className="flex-1 px-2 py-1 border rounded text-sm"
+                        value={editing.value}
+                        onChange={e => { setEditing({ ...editing, value: e.target.value }); setRenameErr(''); }}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setEditing(null); }}
+                      />
+                      <button onClick={handleRename} disabled={renameSaving} className="p-1 text-green-600 hover:text-green-700" title="Save"><Check className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setEditing(null); setRenameErr(''); }} className="p-1 text-gray-400 hover:text-gray-600" title="Cancel"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    {renameErr && <p className="text-[11px] text-red-500">{renameErr}</p>}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {member.user?.name || 'Anonymous'}
+                        {isSelf && <span className="ml-1.5 text-xs text-gray-400 font-normal">(you)</span>}
+                      </p>
+                      <p className="text-xs text-gray-500 uppercase">{member.role}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {member.role === 'PARTICIPANT' && (
+                        <button
+                          onClick={() => handlePromote(member.user_id)}
+                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded transition-colors"
+                        >
+                          Make Admin
+                        </button>
+                      )}
+                      {member.role === 'ADMIN' && !isSelf && (
+                        <button
+                          onClick={() => handleDemote(member.user_id)}
+                          className="text-xs px-2 py-1 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded transition-colors"
+                        >
+                          Revoke Admin
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setEditing({ type: 'member', id: member.user_id, value: member.user?.name || '' }); setRenameErr(''); }}
+                        className="text-gray-300 hover:text-indigo-500 transition-colors p-1 rounded"
+                        title="Rename"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      {!isSelf && (
+                        <button
+                          onClick={() => handleRemoveMember(member.user_id, member.user?.name || 'this person')}
+                          className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
+                          title="Remove from room"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

@@ -29,11 +29,14 @@ const {
   joinRoom,
   deleteRoom,
   addMemberByName,
+  renameMember,
   updateMemberRole,
   removeMember,
   addLocation,
+  renameLocation,
   removeLocation,
   addTimeBlock,
+  renameTimeBlock,
   removeTimeBlock,
   assignShift,
   removeAssignment,
@@ -89,6 +92,7 @@ memberRouter.put(
   updateMemberRole
 );
 
+memberRouter.patch("/members/:userId/name", requireRoomAdmin, renameMember);
 memberRouter.delete("/members/:userId", requireRoomAdmin, removeMember);
 
 memberRouter.post(
@@ -98,6 +102,7 @@ memberRouter.post(
   addLocation
 );
 
+memberRouter.patch("/locations/:locationId", requireRoomAdmin, renameLocation);
 memberRouter.delete("/locations/:locationId", requireRoomAdmin, removeLocation);
 
 memberRouter.post(
@@ -115,6 +120,7 @@ memberRouter.post(
   addTimeBlock
 );
 
+memberRouter.patch("/time-blocks/:blockId", requireRoomAdmin, renameTimeBlock);
 memberRouter.delete("/time-blocks/:blockId", requireRoomAdmin, removeTimeBlock);
 
 memberRouter.post(

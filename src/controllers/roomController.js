@@ -211,6 +211,40 @@ async function addMemberByName(req, res, next) {
   }
 }
 
+async function renameMember(req, res, next) {
+  const roomId = req.roomId;
+  const targetUserId = req.params.userId;
+  const { name } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(422).json({ error: "name is required." });
+  }
+
+  try {
+    const membership = await prisma.roomMember.findUnique({
+      where: { roomId_userId: { roomId, userId: targetUserId } },
+      include: { user: true },
+    });
+    if (!membership) {
+      return res.status(404).json({ error: "Member not found in this room." });
+    }
+
+    const duplicate = await prisma.user.findUnique({ where: { name: name.trim() } });
+    if (duplicate && duplicate.id !== targetUserId) {
+      return res.status(409).json({ error: `A person named "${name.trim()}" already exists.` });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: targetUserId },
+      data: { name: name.trim() },
+    });
+
+    return res.status(200).json({ user_id: targetUserId, name: updated.name });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function updateMemberRole(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
@@ -301,6 +335,33 @@ async function addLocation(req, res, next) {
   }
 }
 
+async function renameLocation(req, res, next) {
+  const roomId = req.roomId;
+  const { locationId } = req.params;
+  const { name } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(422).json({ error: "name is required." });
+  }
+
+  try {
+    const location = await prisma.shiftLocation.findFirst({ where: { id: locationId, roomId } });
+    if (!location) {
+      return res.status(404).json({ error: "Location not found in this room." });
+    }
+
+    const duplicate = await prisma.shiftLocation.findFirst({ where: { roomId, name: name.trim(), NOT: { id: locationId } } });
+    if (duplicate) {
+      return res.status(409).json({ error: `A location named "${name.trim()}" already exists.` });
+    }
+
+    const updated = await prisma.shiftLocation.update({ where: { id: locationId }, data: { name: name.trim() } });
+    return res.status(200).json(mapLocation(updated));
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function removeLocation(req, res, next) {
   const roomId = req.roomId;
   const { locationId } = req.params;
@@ -339,6 +400,33 @@ async function addTimeBlock(req, res, next) {
     });
 
     return res.status(201).json(mapTimeBlock(timeBlock));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function renameTimeBlock(req, res, next) {
+  const roomId = req.roomId;
+  const { blockId } = req.params;
+  const { name } = req.body;
+
+  if (!name || !name.trim()) {
+    return res.status(422).json({ error: "name is required." });
+  }
+
+  try {
+    const timeBlock = await prisma.timeBlock.findFirst({ where: { id: blockId, roomId } });
+    if (!timeBlock) {
+      return res.status(404).json({ error: "Time slot not found in this room." });
+    }
+
+    const duplicate = await prisma.timeBlock.findFirst({ where: { roomId, name: name.trim(), NOT: { id: blockId } } });
+    if (duplicate) {
+      return res.status(409).json({ error: `A time slot named "${name.trim()}" already exists.` });
+    }
+
+    const updated = await prisma.timeBlock.update({ where: { id: blockId }, data: { name: name.trim() } });
+    return res.status(200).json(mapTimeBlock(updated));
   } catch (err) {
     next(err);
   }
@@ -484,11 +572,14 @@ module.exports = {
   joinRoom,
   deleteRoom,
   addMemberByName,
+  renameMember,
   updateMemberRole,
   removeMember,
   addLocation,
+  renameLocation,
   removeLocation,
   addTimeBlock,
+  renameTimeBlock,
   removeTimeBlock,
   assignShift,
   removeAssignment,
