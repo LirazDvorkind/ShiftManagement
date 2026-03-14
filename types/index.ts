@@ -17,6 +17,7 @@ export interface User {
 
 export interface Room {
   id: string;
+  number: number;
   name: string;
   created_at: string;
 }

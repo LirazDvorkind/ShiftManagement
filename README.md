@@ -1,31 +1,34 @@
 # ShiftManager
 
-A collaborative shift scheduling tool. Admins define locations and named time blocks, assign people to shifts, and everyone sees the result in a color-coded weekly calendar.
+A collaborative shift scheduling tool. Enter a room number to join an existing room or create a new one. Admins define locations and time blocks, assign people to shifts, and everyone sees the result in a color-coded weekly calendar.
 
 ## Features
 
-- **Passwordless auth** — log in with just a name; share a room link for others to join
-- **Locations & time blocks** — define reusable named blocks (e.g. "Morning 08:00–16:00") like a list, similar to locations
-- **Weekly calendar** — assignments shown in a 7-day grid, grouped by time block per day
+- **Room numbers** — rooms are identified by a number you choose (e.g. `/room/100`). Enter a number to join an existing room or create it
+- **Passwordless auth** — log in with just a name; no passwords
+- **Locations & time blocks** — define reusable named time blocks (e.g. "Morning 08:00–16:00") alongside locations, both managed as simple lists
+- **Weekly calendar** — assignments displayed in a 7-day grid, grouped by time block within each day
 - **Color-coded people** — each person gets a distinct color across the calendar
-- **Admin controls** — add/remove locations, time blocks, and people; assign and remove shifts inline
-- **Add people directly** — admins can add someone by name without waiting for them to join; an account is created automatically if they haven't registered yet
+- **Admin controls** — add/remove locations, time blocks, and people; assign and remove shifts inline from the calendar
+- **Add people directly** — admins can add someone by name without waiting for them to join; an account is created automatically if the person hasn't registered yet
 
 ## Tech Stack
 
-| Layer    | Technology                          |
-|----------|-------------------------------------|
+| Layer    | Technology |
+|----------|------------|
 | Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
-| Backend  | Express.js (Node 18+)               |
-| Database | Prisma ORM — SQLite (dev) / PostgreSQL (prod) |
-| Auth     | JWT (stored in localStorage)        |
+| Backend  | Express.js (Node 18+) |
+| Database | PostgreSQL via Prisma ORM |
+| Auth     | JWT (stored in localStorage) |
 
-## Getting Started
+---
+
+## Local Development
 
 ### Prerequisites
 
 - Node.js 18+
-- npm
+- PostgreSQL running locally (or use a remote connection string)
 
 ### 1. Install dependencies
 
@@ -39,42 +42,135 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and set at minimum:
+Edit `.env`:
 
 ```env
-DATABASE_URL="file:./dev.db"   # SQLite, zero setup
-JWT_SECRET="your-long-random-secret"
+DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/shiftmanager"
+JWT_SECRET="any-long-random-string"
+JWT_EXPIRES_IN="7d"
 PORT=3001
+NODE_ENV="development"
 ```
 
-### 3. Initialize the database
+### 3. Push schema to database
 
 ```bash
 npm run db:push
 ```
 
-### 4. Run in development
+This creates all tables. Safe to re-run — only applies missing changes.
+
+### 4. Start dev servers
 
 ```bash
 npm run dev
 ```
 
-This starts both servers concurrently:
-- **Next.js** frontend → http://localhost:3000
-- **Express** API → http://localhost:3001
+Starts both concurrently:
+- **Frontend** → http://localhost:3000
+- **API** → http://localhost:3001
 
-## Scripts
+---
 
-| Command            | Description                                  |
-|--------------------|----------------------------------------------|
-| `npm run dev`      | Start both API and frontend with hot reload  |
-| `npm run dev:api`  | API only (nodemon)                           |
-| `npm run dev:web`  | Frontend only (Next.js)                      |
-| `npm run build`    | Production build (generates Prisma client + Next.js build) |
-| `npm run start:api`| Start API in production                      |
-| `npm run start:web`| Start frontend in production                 |
-| `npm run db:push`  | Sync schema to database (dev, resets data)   |
-| `npm run db:studio`| Open Prisma Studio to browse the database   |
+## Database Commands
+
+| Command | What it does |
+|---------|-------------|
+| `npm run db:push` | Sync schema to the database (create/alter tables) |
+| `npm run db:generate` | Regenerate Prisma Client from schema (no DB changes) |
+| `npm run db:migrate` | Create a named migration file (for tracked migrations) |
+| `npm run db:studio` | Open Prisma Studio — visual database browser at localhost:5555 |
+
+> **`db:push` vs `db:migrate`** — `db:push` directly syncs the schema, no migration history. Good for development. `db:migrate` creates versioned SQL files you can commit and replay — recommended once you have real data in production.
+
+---
+
+## Production
+
+### Environment variables required
+
+```env
+DATABASE_URL="postgresql://..."
+JWT_SECRET="long-random-secret-min-32-chars"
+JWT_EXPIRES_IN="7d"
+PORT=3001
+NODE_ENV="production"
+NEXT_PUBLIC_API_URL="https://your-api-domain.com/api"
+```
+
+> Set `NEXT_PUBLIC_API_URL` if the API and frontend are on different origins. If they're on the same host (Railway monorepo, same domain with a proxy), leave it unset and requests go to `/api`.
+
+### Build & start
+
+```bash
+npm run build      # generates Prisma client + Next.js build
+npm run start:api  # starts Express on PORT
+npm run start:web  # starts Next.js on port 3000
+```
+
+---
+
+## Railway Deployment
+
+[Railway](https://railway.app) is the recommended platform. It can run the frontend, API, and a Postgres database all in one project.
+
+### Recommended setup: two services + one database
+
+```
+Railway Project
+├── PostgreSQL  (add via New > Database > PostgreSQL)
+├── API Service  (Express — points to repo root)
+└── Web Service  (Next.js — points to repo root)
+```
+
+### Step-by-step
+
+**1. Create a new Railway project**
+
+Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
+
+**2. Add a PostgreSQL database**
+
+Inside the project → New → Database → PostgreSQL. Railway will provision it and expose `DATABASE_URL` automatically.
+
+**3. Add the API service**
+
+New → GitHub Repo → configure:
+- **Start command:** `node server.js`
+- **Environment variables:**
+  ```
+  NODE_ENV=production
+  PORT=3001
+  JWT_SECRET=<generate a strong secret>
+  JWT_EXPIRES_IN=7d
+  DATABASE_URL=${{Postgres.DATABASE_URL}}   ← reference the DB service
+  ```
+
+After first deploy, run the schema push once via Railway's terminal or a one-off command:
+```bash
+npx prisma db push
+```
+
+**4. Add the Web (Next.js) service**
+
+New → GitHub Repo → configure:
+- **Build command:** `npm run build`
+- **Start command:** `npm run start:web`
+- **Environment variables:**
+  ```
+  NODE_ENV=production
+  NEXT_PUBLIC_API_URL=https://<your-api-service>.railway.app/api
+  ```
+
+**5. Deploy**
+
+Push to your main branch — Railway rebuilds both services automatically.
+
+### Single-service alternative (simpler, less flexible)
+
+If you want one Railway service serving both the API and frontend, you need a process manager (e.g. `concurrently` or `pm2`) and a reverse proxy. The two-service setup above is recommended instead.
+
+---
 
 ## Project Structure
 
@@ -82,61 +178,57 @@ This starts both servers concurrently:
 /app/               Next.js pages (App Router)
   /login            Login page
   /room/[id]        Room dashboard (schedule + admin panel)
-  page.tsx          Landing / room creation
+  page.tsx          Landing — enter a room number to join or create
 
 /components/
   AdminPanel.tsx    Admin controls (locations, time blocks, people, assignments)
-  ScheduleView.tsx  Weekly calendar view
+  ScheduleView.tsx  Weekly calendar view with color-coded assignments
 
 /src/               Express API
   /controllers/     Business logic
-  /middleware/      JWT auth, room membership checks
+  /middleware/      JWT auth, room membership/admin checks
   /routes/          Route definitions
-  /lib/prisma.js    Prisma client
+  /lib/prisma.js    Prisma client singleton
 
-/context/           React auth context
+/context/           React auth context (JWT + user state)
 /lib/api.ts         Typed frontend API client
 /types/index.ts     Shared TypeScript interfaces
 /prisma/schema.prisma  Database schema
 ```
 
+---
+
 ## Data Model
 
-- **Room** — a scheduling namespace; members, locations, and time blocks belong to a room
-- **TimeBlock** — reusable named shift slot with start/end times (e.g. "Morning", 08:00–16:00)
-- **ShiftLocation** — a named place (e.g. "Front Desk")
-- **ShiftAssignment** — links a person to a location + time block on a specific date
-- **RoomMember** — user-room relationship with role (`ADMIN` or `PARTICIPANT`)
+| Model | Description |
+|-------|-------------|
+| `Room` | Scheduling namespace. Identified by a user-chosen integer `number` (e.g. 100) |
+| `TimeBlock` | Reusable named time slot with start/end times (e.g. "Morning", 08:00–16:00) |
+| `ShiftLocation` | A named place within a room (e.g. "Front Desk") |
+| `ShiftAssignment` | Links a person to a location + time block on a specific date |
+| `RoomMember` | User–room join with role: `ADMIN` or `PARTICIPANT` |
+| `User` | Identity record — name only, no password |
 
-## API Overview
+---
 
-All endpoints require `Authorization: Bearer <token>`. Admin-only endpoints additionally require the `ADMIN` role in that room.
+## API Reference
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/auth/session` | Login / register by name → JWT |
-| `POST` | `/api/rooms` | Create a room |
-| `GET` | `/api/rooms/:id` | Get room details |
-| `POST` | `/api/rooms/:id/join` | Join a room |
-| `POST` | `/api/rooms/:id/members` | Add person by name *(admin)* |
-| `PUT` | `/api/rooms/:id/members/:userId/role` | Change member role *(admin)* |
-| `DELETE` | `/api/rooms/:id/members/:userId` | Remove member *(admin)* |
-| `POST` | `/api/rooms/:id/locations` | Add location *(admin)* |
-| `DELETE` | `/api/rooms/:id/locations/:locationId` | Remove location *(admin)* |
-| `POST` | `/api/rooms/:id/time-blocks` | Add time block *(admin)* |
-| `DELETE` | `/api/rooms/:id/time-blocks/:blockId` | Remove time block *(admin)* |
-| `POST` | `/api/rooms/:id/assignments` | Assign a shift *(admin)* |
-| `DELETE` | `/api/rooms/:id/assignments/:assignmentId` | Remove a shift *(admin)* |
-| `GET` | `/api/rooms/:id/schedule` | Get full schedule |
+All endpoints require `Authorization: Bearer <token>` except `/api/auth/session`.
+Admin-only endpoints require the `ADMIN` role in that room.
 
-## Production
-
-Switch `DATABASE_URL` to a PostgreSQL connection string and run:
-
-```bash
-npm run build
-npm run start:api &
-npm run start:web
-```
-
-Set `NEXT_PUBLIC_API_URL` in your environment if the API is on a different origin than the frontend (defaults to `/api`).
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/auth/session` | — | Login / register by name → JWT |
+| `POST` | `/api/rooms` | ✓ | Find or create room by `{ number }` |
+| `GET` | `/api/rooms/:number` | member | Get room details |
+| `POST` | `/api/rooms/:number/join` | ✓ | Join room as participant |
+| `POST` | `/api/rooms/:number/members` | admin | Add person by name (creates account if needed) |
+| `PUT` | `/api/rooms/:number/members/:userId/role` | admin | Change member role |
+| `DELETE` | `/api/rooms/:number/members/:userId` | admin | Remove member |
+| `POST` | `/api/rooms/:number/locations` | admin | Add location |
+| `DELETE` | `/api/rooms/:number/locations/:id` | admin | Remove location |
+| `POST` | `/api/rooms/:number/time-blocks` | admin | Add time block |
+| `DELETE` | `/api/rooms/:number/time-blocks/:id` | admin | Remove time block |
+| `POST` | `/api/rooms/:number/assignments` | admin | Assign a shift |
+| `DELETE` | `/api/rooms/:number/assignments/:id` | admin | Remove a shift |
+| `GET` | `/api/rooms/:number/schedule` | member | Get full schedule |

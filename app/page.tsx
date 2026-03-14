@@ -17,7 +17,7 @@ export default function LandingPage() {
   const router = useRouter();
   const { user, isLoading, logout } = useAuth();
 
-  const [roomName, setRoomName] = useState('');
+  const [roomNumber, setRoomNumber] = useState('');
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -34,15 +34,16 @@ export default function LandingPage() {
     );
   }
 
-  async function handleCreateRoom(e: React.FormEvent) {
+  async function handleGoToRoom(e: React.FormEvent) {
     e.preventDefault();
-    if (!roomName.trim()) return;
+    const n = parseInt(roomNumber, 10);
+    if (!n || n < 1) return;
     setCreating(true);
     try {
-      const room = await api.createRoom(roomName);
-      router.push(`/room/${room.id}`);
+      const room = await api.createRoom(n);
+      router.push(`/room/${room.number}`);
     } catch (err: any) {
-      alert(err.message || 'Error creating room. Please try again.');
+      alert(err.message || 'Error. Please try again.');
       setCreating(false);
     }
   }
@@ -79,46 +80,42 @@ export default function LandingPage() {
           </p>
         </div>
 
-        <form onSubmit={handleCreateRoom} className="space-y-4">
+        <form onSubmit={handleGoToRoom} className="space-y-4">
           <div>
-            <label htmlFor="roomName" className="block text-sm font-medium text-gray-700 mb-1">
-              Room Name
+            <label htmlFor="roomNumber" className="block text-sm font-medium text-gray-700 mb-1">
+              Room Number
             </label>
             <input
-              id="roomName"
-              type="text"
+              id="roomNumber"
+              type="number"
+              min={1}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              placeholder="e.g., Summer Shift 2026"
-              value={roomName}
-              onChange={(e) => setRoomName(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-lg font-mono"
+              placeholder="e.g. 100"
+              value={roomNumber}
+              onChange={(e) => setRoomNumber(e.target.value)}
             />
+            <p className="text-xs text-gray-400 mt-1">Enter a number to join an existing room, or create it if it doesn&apos;t exist yet.</p>
           </div>
 
           <button
             type="submit"
-            disabled={creating || !roomName.trim()}
+            disabled={creating || !roomNumber}
             className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg shadow-md transition-colors"
           >
             {creating ? (
               <>
                 <Loader2 className="animate-spin w-5 h-5 mr-2" />
-                Creating…
+                Loading…
               </>
             ) : (
               <>
                 <PlusCircle className="w-5 h-5 mr-2" />
-                Create New Room
+                Go to Room
               </>
             )}
           </button>
         </form>
-
-        <div className="pt-6 border-t border-gray-100 text-center">
-          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">
-            Simple • Fast • Collaborative
-          </p>
-        </div>
       </div>
     </div>
   );

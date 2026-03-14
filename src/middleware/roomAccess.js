@@ -17,23 +17,28 @@ const prisma = require("../lib/prisma");
  * @param {import('express').NextFunction} next
  */
 async function requireRoomMember(req, res, next) {
-  const roomId = req.params.id;
+  const roomNumber = parseInt(req.params.id, 10);
   const userId = req.user.userId;
 
+  if (isNaN(roomNumber)) {
+    return res.status(404).json({ error: "Room not found." });
+  }
+
   try {
-    const room = await prisma.room.findUnique({ where: { id: roomId } });
+    const room = await prisma.room.findUnique({ where: { number: roomNumber } });
     if (!room) {
       return res.status(404).json({ error: "Room not found." });
     }
 
     const membership = await prisma.roomMember.findUnique({
-      where: { roomId_userId: { roomId, userId } },
+      where: { roomId_userId: { roomId: room.id, userId } },
     });
 
     if (!membership) {
       return res.status(403).json({ error: "You are not a member of this room." });
     }
 
+    req.roomId = room.id;
     req.roomMember = membership;
     next();
   } catch (err) {

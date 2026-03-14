@@ -23,7 +23,7 @@ const VALID_ROLES = ["ADMIN", "PARTICIPANT"];
 // ---------------------------------------------------------------------------
 
 function mapRoom(room) {
-  return { id: room.id, name: room.name, created_at: room.createdAt };
+  return { id: room.id, number: room.number, name: room.name, created_at: room.createdAt };
 }
 
 function mapLocation(loc) {
@@ -81,13 +81,20 @@ function handleValidationErrors(req, res) {
 async function createRoom(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
-  const { name } = req.body;
+  const { number } = req.body;
   const userId = req.user.userId;
 
   try {
+    // Return existing room if found, otherwise create it.
+    const existing = await prisma.room.findUnique({ where: { number } });
+    if (existing) {
+      return res.status(200).json(mapRoom(existing));
+    }
+
     const room = await prisma.room.create({
       data: {
-        name,
+        number,
+        name: `Room ${number}`,
         members: { create: { userId, role: "ADMIN" } },
       },
     });
@@ -99,7 +106,7 @@ async function createRoom(req, res, next) {
 }
 
 async function getRoom(req, res, next) {
-  const roomId = req.params.id;
+  const roomId = req.roomId;
 
   try {
     const room = await prisma.room.findUnique({
@@ -129,14 +136,19 @@ async function getRoom(req, res, next) {
 }
 
 async function joinRoom(req, res, next) {
-  const roomId = req.params.id;
+  const roomNumber = parseInt(req.params.id, 10);
   const userId = req.user.userId;
 
+  if (isNaN(roomNumber)) {
+    return res.status(404).json({ error: "Room not found." });
+  }
+
   try {
-    const room = await prisma.room.findUnique({ where: { id: roomId } });
+    const room = await prisma.room.findUnique({ where: { number: roomNumber } });
     if (!room) {
       return res.status(404).json({ error: "Room not found." });
     }
+    const roomId = room.id;
 
     const existing = await prisma.roomMember.findUnique({
       where: { roomId_userId: { roomId, userId } },
@@ -173,7 +185,7 @@ async function joinRoom(req, res, next) {
 async function addMemberByName(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
-  const roomId = req.params.id;
+  const roomId = req.roomId;
   const { name } = req.body;
 
   try {
@@ -206,7 +218,7 @@ async function addMemberByName(req, res, next) {
 async function updateMemberRole(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
-  const roomId = req.params.id;
+  const roomId = req.roomId;
   const targetUserId = req.params.userId;
   const { role } = req.body;
 
@@ -236,7 +248,7 @@ async function updateMemberRole(req, res, next) {
 }
 
 async function removeMember(req, res, next) {
-  const roomId = req.params.id;
+  const roomId = req.roomId;
   const targetUserId = req.params.userId;
   const requestingUserId = req.user.userId;
 
@@ -277,7 +289,7 @@ async function removeMember(req, res, next) {
 async function addLocation(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
-  const roomId = req.params.id;
+  const roomId = req.roomId;
   const { name } = req.body;
 
   try {
@@ -289,7 +301,8 @@ async function addLocation(req, res, next) {
 }
 
 async function removeLocation(req, res, next) {
-  const { id: roomId, locationId } = req.params;
+  const roomId = req.roomId;
+  const { locationId } = req.params;
 
   try {
     const location = await prisma.shiftLocation.findFirst({ where: { id: locationId, roomId } });
@@ -311,7 +324,7 @@ async function removeLocation(req, res, next) {
 async function addTimeBlock(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
-  const roomId = req.params.id;
+  const roomId = req.roomId;
   const { name, start_time: startTime, end_time: endTime } = req.body;
 
   try {
@@ -326,7 +339,8 @@ async function addTimeBlock(req, res, next) {
 }
 
 async function removeTimeBlock(req, res, next) {
-  const { id: roomId, blockId } = req.params;
+  const roomId = req.roomId;
+  const { blockId } = req.params;
 
   try {
     const timeBlock = await prisma.timeBlock.findFirst({ where: { id: blockId, roomId } });
@@ -348,7 +362,7 @@ async function removeTimeBlock(req, res, next) {
 async function assignShift(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
-  const roomId = req.params.id;
+  const roomId = req.roomId;
   const {
     time_block_id: timeBlockId,
     shift_location_id: shiftLocationId,
@@ -394,7 +408,8 @@ async function assignShift(req, res, next) {
 }
 
 async function removeAssignment(req, res, next) {
-  const { id: roomId, assignmentId } = req.params;
+  const roomId = req.roomId;
+  const { assignmentId } = req.params;
 
   try {
     const assignment = await prisma.shiftAssignment.findFirst({
@@ -417,7 +432,7 @@ async function removeAssignment(req, res, next) {
 // ---------------------------------------------------------------------------
 
 async function getSchedule(req, res, next) {
-  const roomId = req.params.id;
+  const roomId = req.roomId;
 
   try {
     const [locations, timeBlocks, assignments] = await Promise.all([

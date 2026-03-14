@@ -50,7 +50,7 @@ router.use(authenticate);
 
 router.post(
   "/",
-  [body("name").trim().notEmpty().withMessage("name is required.")],
+  [body("number").isInt({ min: 1 }).withMessage("number must be a positive integer.")],
   createRoom
 );
 

@@ -62,8 +62,8 @@ export const auth = {
 };
 
 export const api = {
-  createRoom: (name: string) =>
-    fetcher<Room>('/rooms', { method: 'POST', body: JSON.stringify({ name }) }),
+  createRoom: (number: number) =>
+    fetcher<Room>('/rooms', { method: 'POST', body: JSON.stringify({ number }) }),
 
   getRoom: (id: string) =>
     fetcher<RoomDetail>(`/rooms/${id}`),

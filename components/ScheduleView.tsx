@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { FullSchedule, ShiftAssignment, RoomMember } from '@/types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 
 // 10 distinct user colors (bg, text, dot)
@@ -28,27 +28,31 @@ function getUserColor(index: number) {
   return USER_COLOR_CLASSES[index % USER_COLOR_CLASSES.length];
 }
 
-/** Format "YYYY-MM-DD" to "Mon, Mar 10" */
+const TZ = 'Asia/Jerusalem';
+
+/** Format "YYYY-MM-DD" to "Mon, Mar 10" in Israel time */
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-IL', { weekday: 'short', month: 'short', day: 'numeric', timeZone: TZ });
 }
 
-/** Format "YYYY-MM-DD" to "Monday" (full weekday) */
+/** Format "YYYY-MM-DD" to "Monday" in Israel time */
 function weekdayName(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   const d = new Date(year, month - 1, day);
-  return d.toLocaleDateString('en-US', { weekday: 'long' });
+  return d.toLocaleDateString('en-IL', { weekday: 'long', timeZone: TZ });
 }
 
-/** Get Monday of the week containing `date` */
+/** Get Monday of the week containing `date`, anchored to Israel time */
 function getWeekStart(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay(); // 0=Sun, 1=Mon ...
-  const diff = day === 0 ? -6 : 1 - day;
+  // Get Israel's current date string, then build a local midnight from it
+  const israelDateStr = date.toLocaleDateString('en-CA', { timeZone: TZ }); // "YYYY-MM-DD"
+  const [year, month, day] = israelDateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  const dow = d.getDay(); // 0=Sun, 1=Mon ...
+  const diff = dow === 0 ? -6 : 1 - dow;
   d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
   return d;
 }
 
@@ -57,7 +61,11 @@ function weekDates(weekStart: Date): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
-    return d.toISOString().split('T')[0];
+    // Format as YYYY-MM-DD using local date parts (weekStart is local midnight)
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   });
 }
 
@@ -65,14 +73,14 @@ function weekDates(weekStart: Date): string[] {
 function formatWeekRange(weekStart: Date): string {
   const end = new Date(weekStart);
   end.setDate(end.getDate() + 6);
-  const startStr = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const endStr = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const startStr = weekStart.toLocaleDateString('en-IL', { month: 'short', day: 'numeric', timeZone: TZ });
+  const endStr = end.toLocaleDateString('en-IL', { month: 'short', day: 'numeric', year: 'numeric', timeZone: TZ });
   return `${startStr} – ${endStr}`;
 }
 
-/** Today as "YYYY-MM-DD" */
+/** Today as "YYYY-MM-DD" in Israel time */
 function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', { timeZone: TZ });
 }
 
 interface ScheduleViewProps {
@@ -88,6 +96,7 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState('');
 
   // Build userId → color index map (stable, based on member order)
   const userColorMap = new Map<string, number>();
@@ -112,11 +121,12 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
   const handleRemove = async (assignment: ShiftAssignment) => {
     setRemovingId(assignment.id);
+    setRemoveError('');
     try {
       await api.removeAssignment(roomId, assignment.id);
       onRefresh();
     } catch (err: any) {
-      alert(err.message || 'Failed to remove shift');
+      setRemoveError(err.message || 'Failed to remove shift. Please try again.');
     } finally {
       setRemovingId(null);
     }
@@ -167,6 +177,17 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
         </button>
       </div>
 
+      {/* Remove error */}
+      {removeError && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-sm text-red-600">{removeError}</p>
+          <button onClick={() => setRemoveError('')} className="ml-auto text-red-400 hover:text-red-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-2">
         {dates.map((date) => {
@@ -189,7 +210,7 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                   {date.split('-')[2]}
                 </p>
                 <p className="text-xs text-gray-400">
-                  {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-US', { month: 'short' })}
+                  {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-IL', { month: 'short', timeZone: TZ })}
                 </p>
               </div>
 

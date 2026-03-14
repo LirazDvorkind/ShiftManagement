@@ -20,7 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { RoomDetail, RoomMember, FullSchedule, UserRole } from '@/types';
 import AdminPanel from '@/components/AdminPanel';
 import ScheduleView from '@/components/ScheduleView';
-import { Users, Layout, ShieldAlert, Loader2, LogOut, Copy, Check } from 'lucide-react';
+import { Users, Layout, ShieldAlert, Loader2, LogOut, Copy, Check, AlertCircle } from 'lucide-react';
 
 export default function RoomPage() {
   const { id } = useParams() as { id: string };
@@ -82,13 +82,16 @@ export default function RoomPage() {
     }
   }, [authLoading, user, fetchData]);
 
+  const [joinError, setJoinError] = useState('');
+
   async function handleJoin() {
     setLoading(true);
+    setJoinError('');
     try {
       await api.joinRoom(id);
       await fetchData();
     } catch (err: any) {
-      alert('Failed to join room: ' + (err.message || 'Unknown error'));
+      setJoinError(err.message || 'Failed to join room. Please try again.');
       setLoading(false);
     }
   }
@@ -138,6 +141,12 @@ export default function RoomPage() {
           <p className="text-gray-600">
             You are not a member of this room. Join now to see the shift schedule.
           </p>
+          {joinError && (
+            <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-left">
+              <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-red-600">{joinError}</p>
+            </div>
+          )}
           <button
             onClick={handleJoin}
             disabled={loading}
@@ -188,10 +197,10 @@ export default function RoomPage() {
 
               <button
                 onClick={handleLogout}
-                title="Sign out"
-                className="text-gray-400 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors px-3 py-1.5 rounded-lg"
               >
                 <LogOut className="w-4 h-4" />
+                Sign out
               </button>
             </div>
           </div>
