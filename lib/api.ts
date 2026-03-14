@@ -1,84 +1,104 @@
 /**
  * @file lib/api.ts
- * @description Centralized API utility for Shift Management.
+ * @description Centralized API client for Shift Management.
  */
 
-import { 
-  Room, 
-  RoomMember, 
-  ShiftLocation, 
-  ShiftTime, 
-  ShiftAssignment, 
+import {
+  AuthUser,
+  Room,
+  RoomDetail,
+  RoomMember,
+  ShiftLocation,
+  ShiftTime,
+  ShiftAssignment,
   FullSchedule,
   UserRole,
-  ShiftType
+  ShiftType,
 } from '../types';
 
 const API_BASE_URL = '/api';
 
-/**
- * Generic fetch wrapper with error handling.
- */
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('sm_token');
+}
+
 async function fetcher<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An unknown error occurred' }));
-    throw new Error(error.message || `API Error: ${response.statusText}`);
+    const body = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, body.error || body.message || `HTTP ${response.status}`);
   }
 
   return response.json();
 }
 
+export const auth = {
+  /** Find or create a user by name, returns a JWT. */
+  session: (name: string) =>
+    fetcher<{ token: string; user: AuthUser }>('/auth/session', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+};
+
 export const api = {
-  /**
-   * Room Management
-   */
-  createRoom: (name: string) => 
+  createRoom: (name: string) =>
     fetcher<Room>('/rooms', { method: 'POST', body: JSON.stringify({ name }) }),
 
-  getRoom: (id: string) => 
-    fetcher<Room>(`/rooms/${id}`),
+  getRoom: (id: string) =>
+    fetcher<RoomDetail>(`/rooms/${id}`),
 
-  joinRoom: (id: string) => 
-    fetcher<void>(`/rooms/${id}/join`, { method: 'POST' }),
+  joinRoom: (id: string) =>
+    fetcher<RoomMember>(`/rooms/${id}/join`, { method: 'POST' }),
 
-  updateMemberRole: (roomId: string, userId: string, role: UserRole) => 
-    fetcher<void>(`/rooms/${roomId}/members/${userId}/role`, { 
-      method: 'PUT', 
-      body: JSON.stringify({ role }) 
+  updateMemberRole: (roomId: string, userId: string, role: UserRole) =>
+    fetcher<RoomMember>(`/rooms/${roomId}/members/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
     }),
 
-  /**
-   * Admin Controls
-   */
-  addLocation: (roomId: string, name: string) => 
-    fetcher<ShiftLocation>(`/rooms/${roomId}/locations`, { 
-      method: 'POST', 
-      body: JSON.stringify({ name }) 
+  addLocation: (roomId: string, name: string) =>
+    fetcher<ShiftLocation>(`/rooms/${roomId}/locations`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
     }),
 
-  addShiftTime: (roomId: string, type: ShiftType, date: string) => 
-    fetcher<ShiftTime>(`/rooms/${roomId}/times`, { 
-      method: 'POST', 
-      body: JSON.stringify({ type, date }) 
+  addShiftTime: (roomId: string, type: ShiftType, date: string) =>
+    fetcher<ShiftTime>(`/rooms/${roomId}/times`, {
+      method: 'POST',
+      body: JSON.stringify({ type, date }),
     }),
 
-  assignShift: (roomId: string, data: { shift_time_id: string; shift_location_id: string; user_id: string }) => 
-    fetcher<ShiftAssignment>(`/rooms/${roomId}/assignments`, { 
-      method: 'POST', 
-      body: JSON.stringify(data) 
+  assignShift: (
+    roomId: string,
+    data: { shift_time_id: string; shift_location_id: string; user_id: string },
+  ) =>
+    fetcher<ShiftAssignment>(`/rooms/${roomId}/assignments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 
-  /**
-   * Schedule
-   */
-  getSchedule: (roomId: string) => 
+  getSchedule: (roomId: string) =>
     fetcher<FullSchedule>(`/rooms/${roomId}/schedule`),
 };

@@ -6,16 +6,26 @@
 export type UserRole = 'ADMIN' | 'PARTICIPANT';
 export type ShiftType = 'MORNING' | 'EVENING' | 'NIGHT';
 
+export interface AuthUser {
+  userId: string;
+  name: string;
+}
+
 export interface User {
   id: string;
   name: string;
-  email: string;
 }
 
 export interface Room {
   id: string;
   name: string;
   created_at: string;
+}
+
+export interface RoomDetail extends Room {
+  members: RoomMember[];
+  locations: ShiftLocation[];
+  shift_times: ShiftTime[];
 }
 
 export interface RoomMember {
@@ -47,12 +57,6 @@ export interface ShiftAssignment {
   user?: User;
   location?: ShiftLocation;
   time?: ShiftTime;
-}
-
-export interface ScheduleEntry {
-  location_id: string;
-  time_id: string;
-  assignments: ShiftAssignment[];
 }
 
 export interface FullSchedule {

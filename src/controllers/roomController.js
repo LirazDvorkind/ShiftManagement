@@ -144,7 +144,7 @@ async function getRoom(req, res, next) {
       where: { id: roomId },
       include: {
         members: {
-          include: { user: { select: { id: true, name: true, email: true } } },
+          include: { user: { select: { id: true, name: true } } },
         },
         locations: true,
         shiftTimes: { orderBy: [{ date: "asc" }, { type: "asc" }] },
@@ -195,7 +195,7 @@ async function joinRoom(req, res, next) {
 
     const member = await prisma.roomMember.create({
       data: { roomId, userId, role: "PARTICIPANT" },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: { user: { select: { id: true, name: true } } },
     });
 
     return res.status(201).json(mapMember(member));
@@ -239,7 +239,7 @@ async function updateMemberRole(req, res, next) {
     const updated = await prisma.roomMember.update({
       where: { roomId_userId: { roomId, userId: targetUserId } },
       data: { role },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: { user: { select: { id: true, name: true } } },
     });
 
     return res.status(200).json(mapMember(updated));
@@ -442,7 +442,7 @@ async function assignShift(req, res, next) {
       include: {
         shiftTime: true,
         shiftLocation: true,
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, name: true } },
       },
     });
 
@@ -513,7 +513,7 @@ async function getSchedule(req, res, next) {
         include: {
           shiftLocation: true,
           shiftTime: true,
-          user: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true } },
         },
       }),
     ]);
