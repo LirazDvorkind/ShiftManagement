@@ -61,6 +61,20 @@ export const auth = {
     }),
 };
 
+export const manager = {
+  getRooms: (password: string) =>
+    fetcher<{ id: string; number: number; name: string; created_at: string; members: { user_id: string; name: string; role: string }[] }[]>(
+      '/manager/rooms',
+      { headers: { 'x-manager-key': password } },
+    ),
+
+  deleteRoom: (password: string, roomId: string) =>
+    fetcher<{ message: string }>(`/manager/rooms/${roomId}`, {
+      method: 'DELETE',
+      headers: { 'x-manager-key': password },
+    }),
+};
+
 export const api = {
   createRoom: (number: number) =>
     fetcher<Room>('/rooms', { method: 'POST', body: JSON.stringify({ number }) }),

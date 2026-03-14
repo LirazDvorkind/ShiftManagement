@@ -14,6 +14,7 @@ const cors = require("cors");
 
 const authRouter = require("./routes/auth");
 const roomsRouter = require("./routes/rooms");
+const managerRouter = require("./routes/manager");
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRouter);
 app.use("/api/rooms", roomsRouter);
+app.use("/api/manager", managerRouter);
 
 // Health check
 app.get("/health", (_req, res) => res.json({ status: "ok" }));

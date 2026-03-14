@@ -10,6 +10,7 @@ import { MapPin, Clock, UserPlus, ShieldCheck, Trash2, Plus, Users, Calendar, Ch
 
 interface AdminPanelProps {
   roomId: string;
+  currentUserId: string;
   locations: ShiftLocation[];
   timeBlocks: TimeBlock[];
   members: RoomMember[];
@@ -92,7 +93,10 @@ function isValidDisplayDate(display: string): boolean {
 
 // --- Component ---
 
-export default function AdminPanel({ roomId, locations, timeBlocks, members, onRefresh }: AdminPanelProps) {
+export default function AdminPanel({ roomId, currentUserId, locations, timeBlocks, members, onRefresh }: AdminPanelProps) {
+  const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedTimeBlocks = [...timeBlocks].sort((a, b) => a.name.localeCompare(b.name));
+  const sortedMembers = [...members].sort((a, b) => (a.user?.name ?? '').localeCompare(b.user?.name ?? ''));
   const locationBtn  = useFormState();
   const blockBtn     = useFormState();
   const assignBtn    = useFormState();
@@ -280,8 +284,8 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
             <MapPin className="w-4 h-4 mr-1" /> Locations
           </h3>
           <ul className="divide-y divide-gray-100">
-            {locations.length === 0 && <li className="text-xs text-gray-400 italic py-1">No locations yet</li>}
-            {locations.map(loc => (
+            {sortedLocations.length === 0 && <li className="text-xs text-gray-400 italic py-1">No locations yet</li>}
+            {sortedLocations.map(loc => (
               <li key={loc.id} className="flex items-center justify-between py-1.5">
                 <span className="text-sm text-gray-800">{loc.name}</span>
                 <button
@@ -313,8 +317,8 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
             <Clock className="w-4 h-4 mr-1" /> Time Blocks
           </h3>
           <ul className="divide-y divide-gray-100">
-            {timeBlocks.length === 0 && <li className="text-xs text-gray-400 italic py-1">No time blocks yet</li>}
-            {timeBlocks.map(block => (
+            {sortedTimeBlocks.length === 0 && <li className="text-xs text-gray-400 italic py-1">No time blocks yet</li>}
+            {sortedTimeBlocks.map(block => (
               <li key={block.id} className="flex items-center justify-between py-1.5">
                 <div>
                   <p className="text-sm font-medium text-gray-800">{block.name}</p>
@@ -383,15 +387,15 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
           <form onSubmit={handleAssign} className="space-y-2">
             <select className="w-full px-3 py-2 border rounded-md text-sm" value={selectedUser} onChange={e => { setSelectedUser(e.target.value); setAssignErr(''); }}>
               <option value="">Select Person</option>
-              {members.map(m => <option key={m.user_id} value={m.user_id}>{m.user?.name || m.user_id}</option>)}
+              {sortedMembers.map(m => <option key={m.user_id} value={m.user_id}>{m.user?.name || m.user_id}</option>)}
             </select>
             <select className="w-full px-3 py-2 border rounded-md text-sm" value={selectedLocation} onChange={e => { setSelectedLocation(e.target.value); setAssignErr(''); }}>
               <option value="">Select Location</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              {sortedLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
             <select className="w-full px-3 py-2 border rounded-md text-sm" value={selectedBlock} onChange={e => { setSelectedBlock(e.target.value); setAssignErr(''); }}>
               <option value="">Select Time Block</option>
-              {timeBlocks.map(b => <option key={b.id} value={b.id}>{b.name} ({b.start_time}–{b.end_time})</option>)}
+              {sortedTimeBlocks.map(b => <option key={b.id} value={b.id}>{b.name} ({b.start_time}–{b.end_time})</option>)}
             </select>
 
             <div>
@@ -449,39 +453,47 @@ export default function AdminPanel({ roomId, locations, timeBlocks, members, onR
           </div>
         )}
         <div className="divide-y divide-gray-100 mb-4">
-          {members.map(member => (
-            <div key={member.user_id} className="py-3 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-medium text-gray-900 truncate">{member.user?.name || 'Anonymous'}</p>
-                <p className="text-xs text-gray-500 uppercase">{member.role}</p>
+          {sortedMembers.map(member => {
+            const isSelf = member.user_id === currentUserId;
+            return (
+              <div key={member.user_id} className="py-3 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 truncate">
+                    {member.user?.name || 'Anonymous'}
+                    {isSelf && <span className="ml-1.5 text-xs text-gray-400 font-normal">(you)</span>}
+                  </p>
+                  <p className="text-xs text-gray-500 uppercase">{member.role}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {member.role === 'PARTICIPANT' && (
+                    <button
+                      onClick={() => handlePromote(member.user_id)}
+                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded transition-colors"
+                    >
+                      Make Admin
+                    </button>
+                  )}
+                  {member.role === 'ADMIN' && !isSelf && (
+                    <button
+                      onClick={() => handleDemote(member.user_id)}
+                      className="text-xs px-2 py-1 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded transition-colors"
+                    >
+                      Revoke Admin
+                    </button>
+                  )}
+                  {!isSelf && (
+                    <button
+                      onClick={() => handleRemoveMember(member.user_id, member.user?.name || 'this person')}
+                      className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
+                      title="Remove from room"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {member.role === 'PARTICIPANT' && (
-                  <button
-                    onClick={() => handlePromote(member.user_id)}
-                    className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-700 rounded transition-colors"
-                  >
-                    Make Admin
-                  </button>
-                )}
-                {member.role === 'ADMIN' && (
-                  <button
-                    onClick={() => handleDemote(member.user_id)}
-                    className="text-xs px-2 py-1 bg-gray-100 hover:bg-amber-100 text-gray-600 hover:text-amber-700 rounded transition-colors"
-                  >
-                    Revoke Admin
-                  </button>
-                )}
-                <button
-                  onClick={() => handleRemoveMember(member.user_id, member.user?.name || 'this person')}
-                  className="text-gray-300 hover:text-red-500 transition-colors p-1 rounded"
-                  title="Remove from room"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <form onSubmit={handleAddMember} className="flex gap-2">
           <input

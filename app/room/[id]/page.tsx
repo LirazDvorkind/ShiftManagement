@@ -54,7 +54,7 @@ export default function RoomPage() {
       ]);
 
       setRoom(roomData);
-      setMembers(roomData.members);
+      setMembers([...roomData.members].sort((a, b) => (a.user?.name ?? '').localeCompare(b.user?.name ?? '')));
       setSchedule(scheduleData);
       setIsMember(true);
 
@@ -169,7 +169,7 @@ export default function RoomPage() {
 
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors px-3 py-1.5 rounded-lg"
+                className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors px-3 py-1.5 rounded-lg"
               >
                 <LogOut className="w-4 h-4" />
                 Sign out
@@ -200,6 +200,7 @@ export default function RoomPage() {
           <section>
             <AdminPanel
               roomId={id}
+              currentUserId={user?.userId ?? ''}
               locations={schedule?.locations ?? []}
               timeBlocks={schedule?.time_blocks ?? []}
               members={members}

@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { PlusCircle, Calendar, LogOut, Loader2, AlertCircle } from 'lucide-react';
+import { PlusCircle, Calendar, LogOut, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 
 export default function LandingPage() {
   const router = useRouter();
@@ -64,7 +64,7 @@ export default function LandingPage() {
         </span>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors px-3 py-1.5 rounded-lg hover:bg-red-50"
+          className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors px-3 py-1.5 rounded-lg"
         >
           <LogOut className="w-4 h-4" />
           Sign out
@@ -124,6 +124,16 @@ export default function LandingPage() {
             )}
           </button>
         </form>
+      </div>
+
+      <div className="mt-6">
+        <Link
+          href="/manager"
+          className="flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-indigo-600 transition-colors"
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          Manager access
+        </Link>
       </div>
     </div>
   );
