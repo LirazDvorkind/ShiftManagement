@@ -1,0 +1,80 @@
+// Prisma schema for Shift Management API
+// Supports SQLite (default) and PostgreSQL (change provider + DATABASE_URL).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String            @id @default(uuid())
+  name         String
+  email        String            @unique
+  passwordHash String
+  createdAt    DateTime          @default(now())
+
+  memberships  RoomMember[]
+  assignments  ShiftAssignment[]
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  members     RoomMember[]
+  locations   ShiftLocation[]
+  shiftTimes  ShiftTime[]
+  assignments ShiftAssignment[]
+}
+
+/// role is one of: 'ADMIN' | 'PARTICIPANT'
+model RoomMember {
+  roomId String
+  userId String
+  role   String
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+}
+
+model ShiftLocation {
+  id     String @id @default(uuid())
+  roomId String
+  name   String
+
+  room        Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  assignments ShiftAssignment[]
+}
+
+/// type is one of: 'MORNING' | 'EVENING' | 'NIGHT'
+model ShiftTime {
+  id     String   @id @default(uuid())
+  roomId String
+  type   String
+  date   DateTime
+
+  room        Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  assignments ShiftAssignment[]
+}
+
+model ShiftAssignment {
+  id              String @id @default(uuid())
+  roomId          String
+  shiftTimeId     String
+  shiftLocationId String
+  userId          String
+
+  room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  shiftTime     ShiftTime     @relation(fields: [shiftTimeId], references: [id], onDelete: Cascade)
+  shiftLocation ShiftLocation @relation(fields: [shiftLocationId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([shiftTimeId, shiftLocationId, userId])
+}
