@@ -99,9 +99,20 @@ function LoginForm() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-400">
-          Your name is your identity — the same name always returns you to your account.
-        </p>
+        <ol className="space-y-3 text-sm text-gray-600 border-t pt-5">
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">1</span>
+            <span><span className="font-medium text-gray-800">Enter your name</span> — your account is created automatically. The same name always brings you back.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">2</span>
+            <span><span className="font-medium text-gray-800">Join or create a room</span> — enter a room number to access a room you&apos;ve been added to, or start a new one.</span>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">3</span>
+            <span><span className="font-medium text-gray-800">Manage shifts</span> — view the weekly schedule, assign shifts, and keep your team organised.</span>
+          </li>
+        </ol>
       </div>
     </div>
   );

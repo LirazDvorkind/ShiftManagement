@@ -225,6 +225,13 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
     if (!name) return;
     setMemberErr('');
     setMemberSuccess('');
+    const alreadyMember = members.some(
+      m => (m.user?.name ?? '').toLowerCase() === name.toLowerCase()
+    );
+    if (alreadyMember) {
+      setMemberErr(`${name} is already in this room.`);
+      return;
+    }
     memberBtn.load();
     try {
       await api.addMember(roomId, name);
