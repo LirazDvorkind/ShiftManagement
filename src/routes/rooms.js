@@ -5,18 +5,18 @@
  * Routes scoped to a room (/api/rooms/:id/*) also require room membership.
  * Admin-only routes additionally require the ADMIN role via requireRoomAdmin.
  *
- * POST   /api/rooms                              — create room
- * GET    /api/rooms/:id                          — get room details
- * POST   /api/rooms/:id/join                     — join room
- * PUT    /api/rooms/:id/members/:userId/role     — update member role  [Admin]
- * DELETE /api/rooms/:id/members/:userId          — remove member       [Admin]
- * POST   /api/rooms/:id/locations                — add location        [Admin]
- * DELETE /api/rooms/:id/locations/:locationId    — remove location     [Admin]
- * POST   /api/rooms/:id/times                    — add shift time      [Admin]
- * DELETE /api/rooms/:id/times/:timeId            — remove shift time   [Admin]
- * POST   /api/rooms/:id/assignments              — assign user         [Admin]
- * DELETE /api/rooms/:id/assignments/:assignmentId — remove assignment  [Admin]
- * GET    /api/rooms/:id/schedule                 — get full schedule
+ * POST   /api/rooms                                  — create room
+ * GET    /api/rooms/:id                              — get room details
+ * POST   /api/rooms/:id/join                         — join room
+ * PUT    /api/rooms/:id/members/:userId/role         — update member role  [Admin]
+ * DELETE /api/rooms/:id/members/:userId              — remove member       [Admin]
+ * POST   /api/rooms/:id/locations                    — add location        [Admin]
+ * DELETE /api/rooms/:id/locations/:locationId        — remove location     [Admin]
+ * POST   /api/rooms/:id/time-blocks                  — add time block      [Admin]
+ * DELETE /api/rooms/:id/time-blocks/:blockId         — remove time block   [Admin]
+ * POST   /api/rooms/:id/assignments                  — assign user         [Admin]
+ * DELETE /api/rooms/:id/assignments/:assignmentId    — remove assignment   [Admin]
+ * GET    /api/rooms/:id/schedule                     — get full schedule
  */
 
 const { Router } = require("express");
@@ -27,12 +27,13 @@ const {
   createRoom,
   getRoom,
   joinRoom,
+  addMemberByName,
   updateMemberRole,
   removeMember,
   addLocation,
   removeLocation,
-  addShiftTime,
-  removeShiftTime,
+  addTimeBlock,
+  removeTimeBlock,
   assignShift,
   removeAssignment,
   getSchedule,
@@ -66,6 +67,13 @@ memberRouter.get("/schedule", getSchedule);
 // Admin-only sub-routes
 // ---------------------------------------------------------------------------
 
+memberRouter.post(
+  "/members",
+  requireRoomAdmin,
+  [body("name").trim().notEmpty().withMessage("name is required.")],
+  addMemberByName
+);
+
 memberRouter.put(
   "/members/:userId/role",
   requireRoomAdmin,
@@ -91,28 +99,32 @@ memberRouter.post(
 memberRouter.delete("/locations/:locationId", requireRoomAdmin, removeLocation);
 
 memberRouter.post(
-  "/times",
+  "/time-blocks",
   requireRoomAdmin,
   [
-    body("type")
-      .notEmpty()
-      .withMessage("type is required.")
-      .isIn(["MORNING", "EVENING", "NIGHT"])
-      .withMessage("type must be MORNING, EVENING, or NIGHT."),
-    body("date").isISO8601().withMessage("date must be a valid ISO 8601 date."),
+    body("name").trim().notEmpty().withMessage("name is required."),
+    body("start_time")
+      .matches(/^\d{2}:\d{2}$/)
+      .withMessage("start_time must be in HH:MM format."),
+    body("end_time")
+      .matches(/^\d{2}:\d{2}$/)
+      .withMessage("end_time must be in HH:MM format."),
   ],
-  addShiftTime
+  addTimeBlock
 );
 
-memberRouter.delete("/times/:timeId", requireRoomAdmin, removeShiftTime);
+memberRouter.delete("/time-blocks/:blockId", requireRoomAdmin, removeTimeBlock);
 
 memberRouter.post(
   "/assignments",
   requireRoomAdmin,
   [
-    body("shift_time_id").notEmpty().withMessage("shift_time_id is required."),
+    body("time_block_id").notEmpty().withMessage("time_block_id is required."),
     body("shift_location_id").notEmpty().withMessage("shift_location_id is required."),
     body("user_id").notEmpty().withMessage("user_id is required."),
+    body("date")
+      .matches(/^\d{4}-\d{2}-\d{2}$/)
+      .withMessage("date must be in YYYY-MM-DD format."),
   ],
   assignShift
 );

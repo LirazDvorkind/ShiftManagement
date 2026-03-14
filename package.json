@@ -6,7 +6,7 @@
     "dev": "concurrently --names \"API,WEB\" --prefix-colors \"cyan,magenta\" \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "nodemon server.js",
     "dev:web": "next dev --port 3000",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start:api": "node server.js",
     "start:web": "next start --port 3000",
     "db:generate": "prisma generate",

@@ -23,7 +23,7 @@ model Room {
 
   members     RoomMember[]
   locations   ShiftLocation[]
-  shiftTimes  ShiftTime[]
+  timeBlocks  TimeBlock[]
   assignments ShiftAssignment[]
 }
 
@@ -48,12 +48,13 @@ model ShiftLocation {
   assignments ShiftAssignment[]
 }
 
-/// type is one of: 'MORNING' | 'EVENING' | 'NIGHT'
-model ShiftTime {
-  id     String   @id @default(uuid())
-  roomId String
-  type   String
-  date   DateTime
+/// Reusable named time block (e.g. "Morning", startTime "08:00", endTime "16:00")
+model TimeBlock {
+  id        String @id @default(uuid())
+  roomId    String
+  name      String
+  startTime String
+  endTime   String
 
   room        Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
   assignments ShiftAssignment[]
@@ -62,14 +63,15 @@ model ShiftTime {
 model ShiftAssignment {
   id              String @id @default(uuid())
   roomId          String
-  shiftTimeId     String
+  timeBlockId     String
   shiftLocationId String
   userId          String
+  date            String  // "YYYY-MM-DD"
 
   room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  shiftTime     ShiftTime     @relation(fields: [shiftTimeId], references: [id], onDelete: Cascade)
+  timeBlock     TimeBlock     @relation(fields: [timeBlockId], references: [id], onDelete: Cascade)
   shiftLocation ShiftLocation @relation(fields: [shiftLocationId], references: [id], onDelete: Cascade)
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([shiftTimeId, shiftLocationId, userId])
+  @@unique([timeBlockId, shiftLocationId, userId, date])
 }

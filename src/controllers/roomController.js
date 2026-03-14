@@ -5,7 +5,7 @@
  *   - Room creation and retrieval
  *   - Joining a room
  *   - Role management
- *   - Location and shift-time management (Admin only)
+ *   - Location and time-block management (Admin only)
  *   - Shift assignments (Admin only)
  *   - Full schedule compilation
  *
@@ -17,58 +17,44 @@ const { validationResult } = require("express-validator");
 const prisma = require("../lib/prisma");
 
 const VALID_ROLES = ["ADMIN", "PARTICIPANT"];
-const VALID_SHIFT_TYPES = ["MORNING", "EVENING", "NIGHT"];
 
 // ---------------------------------------------------------------------------
 // Response mappers (Prisma camelCase → API snake_case)
 // ---------------------------------------------------------------------------
 
-/**
- * @param {{ id: string, name: string, createdAt: Date }} room
- * @returns {{ id: string, name: string, created_at: string }}
- */
 function mapRoom(room) {
   return { id: room.id, name: room.name, created_at: room.createdAt };
 }
 
-/**
- * @param {{ id: string, roomId: string, name: string }} loc
- * @returns {{ id: string, room_id: string, name: string }}
- */
 function mapLocation(loc) {
   return { id: loc.id, room_id: loc.roomId, name: loc.name };
 }
 
-/**
- * @param {{ id: string, roomId: string, type: string, date: Date }} st
- * @returns {{ id: string, room_id: string, type: string, date: string }}
- */
-function mapShiftTime(st) {
-  return { id: st.id, room_id: st.roomId, type: st.type, date: st.date };
+function mapTimeBlock(tb) {
+  return {
+    id: tb.id,
+    room_id: tb.roomId,
+    name: tb.name,
+    start_time: tb.startTime,
+    end_time: tb.endTime,
+  };
 }
 
-/**
- * @param {object} a  Prisma ShiftAssignment (may include nested shiftLocation / user)
- * @returns {object}
- */
 function mapAssignment(a) {
   const base = {
     id: a.id,
     room_id: a.roomId,
-    shift_time_id: a.shiftTimeId,
+    time_block_id: a.timeBlockId,
     shift_location_id: a.shiftLocationId,
     user_id: a.userId,
+    date: a.date,
   };
   if (a.user) base.user = a.user;
   if (a.shiftLocation) base.location = mapLocation(a.shiftLocation);
-  if (a.shiftTime) base.time = mapShiftTime(a.shiftTime);
+  if (a.timeBlock) base.time_block = mapTimeBlock(a.timeBlock);
   return base;
 }
 
-/**
- * @param {{ roomId: string, userId: string, role: string, user?: object }} m
- * @returns {{ room_id: string, user_id: string, role: string, user?: object }}
- */
 function mapMember(m) {
   const base = { room_id: m.roomId, user_id: m.userId, role: m.role };
   if (m.user) base.user = m.user;
@@ -79,13 +65,6 @@ function mapMember(m) {
 // Utility
 // ---------------------------------------------------------------------------
 
-/**
- * Sends 422 with validation errors and returns true when errors are present.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @returns {boolean}
- */
 function handleValidationErrors(req, res) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -99,14 +78,6 @@ function handleValidationErrors(req, res) {
 // Rooms
 // ---------------------------------------------------------------------------
 
-/**
- * POST /api/rooms
- * Creates a new room and assigns the requesting user as its initial Admin.
- *
- * @param {import('express').Request}  req  Body: { name }
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function createRoom(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
@@ -127,15 +98,6 @@ async function createRoom(req, res, next) {
   }
 }
 
-/**
- * GET /api/rooms/:id
- * Returns room details including members, locations, and shift times.
- * Requires authenticated room membership.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function getRoom(req, res, next) {
   const roomId = req.params.id;
 
@@ -147,7 +109,7 @@ async function getRoom(req, res, next) {
           include: { user: { select: { id: true, name: true } } },
         },
         locations: true,
-        shiftTimes: { orderBy: [{ date: "asc" }, { type: "asc" }] },
+        timeBlocks: { orderBy: { startTime: "asc" } },
       },
     });
 
@@ -159,22 +121,13 @@ async function getRoom(req, res, next) {
       ...mapRoom(room),
       members: room.members.map(mapMember),
       locations: room.locations.map(mapLocation),
-      shift_times: room.shiftTimes.map(mapShiftTime),
+      time_blocks: room.timeBlocks.map(mapTimeBlock),
     });
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * POST /api/rooms/:id/join
- * Adds the requesting user to the room as a Participant.
- * Responds gracefully if they are already a member.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function joinRoom(req, res, next) {
   const roomId = req.params.id;
   const userId = req.user.userId;
@@ -209,13 +162,47 @@ async function joinRoom(req, res, next) {
 // ---------------------------------------------------------------------------
 
 /**
- * PUT /api/rooms/:id/members/:userId/role
- * Updates the role of a room member. Admin only.
+ * POST /api/rooms/:id/members
+ * Adds a user by name to the room as a Participant. Admin only.
+ * Creates the user account if it doesn't exist yet.
  *
- * @param {import('express').Request}  req  Body: { role }
+ * @param {import('express').Request}  req  Body: { name }
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
+async function addMemberByName(req, res, next) {
+  if (handleValidationErrors(req, res)) return;
+
+  const roomId = req.params.id;
+  const { name } = req.body;
+
+  try {
+    // Upsert user by name (creates account if they haven't registered yet)
+    const user = await prisma.user.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+
+    const existing = await prisma.roomMember.findUnique({
+      where: { roomId_userId: { roomId, userId: user.id } },
+    });
+
+    if (existing) {
+      return res.status(200).json({ message: "Already a member.", member: mapMember({ ...existing, user }) });
+    }
+
+    const member = await prisma.roomMember.create({
+      data: { roomId, userId: user.id, role: "PARTICIPANT" },
+      include: { user: { select: { id: true, name: true } } },
+    });
+
+    return res.status(201).json(mapMember(member));
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function updateMemberRole(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
@@ -248,15 +235,6 @@ async function updateMemberRole(req, res, next) {
   }
 }
 
-/**
- * DELETE /api/rooms/:id/members/:userId
- * Removes a participant from the room. Admin only.
- * Prevents removal of the last Admin or self-removal.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function removeMember(req, res, next) {
   const roomId = req.params.id;
   const targetUserId = req.params.userId;
@@ -296,14 +274,6 @@ async function removeMember(req, res, next) {
 // Locations
 // ---------------------------------------------------------------------------
 
-/**
- * POST /api/rooms/:id/locations
- * Adds a named location to the room. Admin only.
- *
- * @param {import('express').Request}  req  Body: { name }
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function addLocation(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
@@ -318,14 +288,6 @@ async function addLocation(req, res, next) {
   }
 }
 
-/**
- * DELETE /api/rooms/:id/locations/:locationId
- * Removes a location and its cascading assignments. Admin only.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function removeLocation(req, res, next) {
   const { id: roomId, locationId } = req.params;
 
@@ -343,59 +305,37 @@ async function removeLocation(req, res, next) {
 }
 
 // ---------------------------------------------------------------------------
-// Shift times
+// Time blocks
 // ---------------------------------------------------------------------------
 
-/**
- * POST /api/rooms/:id/times
- * Adds a shift time slot (type + date) to the room. Admin only.
- *
- * @param {import('express').Request}  req  Body: { type, date }
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
-async function addShiftTime(req, res, next) {
+async function addTimeBlock(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
   const roomId = req.params.id;
-  const { type, date } = req.body;
-
-  if (!VALID_SHIFT_TYPES.includes(type)) {
-    return res
-      .status(422)
-      .json({ error: `type must be one of: ${VALID_SHIFT_TYPES.join(", ")}.` });
-  }
+  const { name, start_time: startTime, end_time: endTime } = req.body;
 
   try {
-    const shiftTime = await prisma.shiftTime.create({
-      data: { roomId, type, date: new Date(date) },
+    const timeBlock = await prisma.timeBlock.create({
+      data: { roomId, name, startTime, endTime },
     });
 
-    return res.status(201).json(mapShiftTime(shiftTime));
+    return res.status(201).json(mapTimeBlock(timeBlock));
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * DELETE /api/rooms/:id/times/:timeId
- * Removes a shift time and its cascading assignments. Admin only.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
-async function removeShiftTime(req, res, next) {
-  const { id: roomId, timeId } = req.params;
+async function removeTimeBlock(req, res, next) {
+  const { id: roomId, blockId } = req.params;
 
   try {
-    const shiftTime = await prisma.shiftTime.findFirst({ where: { id: timeId, roomId } });
-    if (!shiftTime) {
-      return res.status(404).json({ error: "Shift time not found in this room." });
+    const timeBlock = await prisma.timeBlock.findFirst({ where: { id: blockId, roomId } });
+    if (!timeBlock) {
+      return res.status(404).json({ error: "Time block not found in this room." });
     }
 
-    await prisma.shiftTime.delete({ where: { id: timeId } });
-    return res.status(200).json({ message: "Shift time removed." });
+    await prisma.timeBlock.delete({ where: { id: blockId } });
+    return res.status(200).json({ message: "Time block removed." });
   } catch (err) {
     next(err);
   }
@@ -405,30 +345,26 @@ async function removeShiftTime(req, res, next) {
 // Assignments
 // ---------------------------------------------------------------------------
 
-/**
- * POST /api/rooms/:id/assignments
- * Assigns a participant to a specific shift time and location. Admin only.
- * Accepts body keys in snake_case to match the frontend API client.
- *
- * @param {import('express').Request}  req  Body: { shift_time_id, shift_location_id, user_id }
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function assignShift(req, res, next) {
   if (handleValidationErrors(req, res)) return;
 
   const roomId = req.params.id;
-  const { shift_time_id: shiftTimeId, shift_location_id: shiftLocationId, user_id: userId } = req.body;
+  const {
+    time_block_id: timeBlockId,
+    shift_location_id: shiftLocationId,
+    user_id: userId,
+    date,
+  } = req.body;
 
   try {
-    const [shiftTime, shiftLocation, membership] = await Promise.all([
-      prisma.shiftTime.findFirst({ where: { id: shiftTimeId, roomId } }),
+    const [timeBlock, shiftLocation, membership] = await Promise.all([
+      prisma.timeBlock.findFirst({ where: { id: timeBlockId, roomId } }),
       prisma.shiftLocation.findFirst({ where: { id: shiftLocationId, roomId } }),
       prisma.roomMember.findUnique({ where: { roomId_userId: { roomId, userId } } }),
     ]);
 
-    if (!shiftTime) {
-      return res.status(404).json({ error: "Shift time not found in this room." });
+    if (!timeBlock) {
+      return res.status(404).json({ error: "Time block not found in this room." });
     }
     if (!shiftLocation) {
       return res.status(404).json({ error: "Location not found in this room." });
@@ -438,9 +374,9 @@ async function assignShift(req, res, next) {
     }
 
     const assignment = await prisma.shiftAssignment.create({
-      data: { roomId, shiftTimeId, shiftLocationId, userId },
+      data: { roomId, timeBlockId, shiftLocationId, userId, date },
       include: {
-        shiftTime: true,
+        timeBlock: true,
         shiftLocation: true,
         user: { select: { id: true, name: true } },
       },
@@ -451,20 +387,12 @@ async function assignShift(req, res, next) {
     if (err.code === "P2002") {
       return res
         .status(409)
-        .json({ error: "This user is already assigned to that shift and location." });
+        .json({ error: "This user is already assigned to that shift and location on that date." });
     }
     next(err);
   }
 }
 
-/**
- * DELETE /api/rooms/:id/assignments/:assignmentId
- * Removes a shift assignment. Admin only.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function removeAssignment(req, res, next) {
   const { id: roomId, assignmentId } = req.params;
 
@@ -488,39 +416,30 @@ async function removeAssignment(req, res, next) {
 // Schedule
 // ---------------------------------------------------------------------------
 
-/**
- * GET /api/rooms/:id/schedule
- * Returns the full compiled schedule as flat parallel arrays to match the
- * FullSchedule interface: { locations, times, assignments }.
- * Requires room membership.
- *
- * @param {import('express').Request}  req
- * @param {import('express').Response} res
- * @param {import('express').NextFunction} next
- */
 async function getSchedule(req, res, next) {
   const roomId = req.params.id;
 
   try {
-    const [locations, times, assignments] = await Promise.all([
+    const [locations, timeBlocks, assignments] = await Promise.all([
       prisma.shiftLocation.findMany({ where: { roomId } }),
-      prisma.shiftTime.findMany({
+      prisma.timeBlock.findMany({
         where: { roomId },
-        orderBy: [{ date: "asc" }, { type: "asc" }],
+        orderBy: { startTime: "asc" },
       }),
       prisma.shiftAssignment.findMany({
         where: { roomId },
         include: {
           shiftLocation: true,
-          shiftTime: true,
+          timeBlock: true,
           user: { select: { id: true, name: true } },
         },
+        orderBy: { date: "asc" },
       }),
     ]);
 
     return res.status(200).json({
       locations: locations.map(mapLocation),
-      times: times.map(mapShiftTime),
+      time_blocks: timeBlocks.map(mapTimeBlock),
       assignments: assignments.map(mapAssignment),
     });
   } catch (err) {
@@ -532,12 +451,13 @@ module.exports = {
   createRoom,
   getRoom,
   joinRoom,
+  addMemberByName,
   updateMemberRole,
   removeMember,
   addLocation,
   removeLocation,
-  addShiftTime,
-  removeShiftTime,
+  addTimeBlock,
+  removeTimeBlock,
   assignShift,
   removeAssignment,
   getSchedule,

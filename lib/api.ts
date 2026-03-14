@@ -9,14 +9,13 @@ import {
   RoomDetail,
   RoomMember,
   ShiftLocation,
-  ShiftTime,
+  TimeBlock,
   ShiftAssignment,
   FullSchedule,
   UserRole,
-  ShiftType,
 } from '../types';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export class ApiError extends Error {
   constructor(
@@ -72,6 +71,12 @@ export const api = {
   joinRoom: (id: string) =>
     fetcher<RoomMember>(`/rooms/${id}/join`, { method: 'POST' }),
 
+  addMember: (roomId: string, name: string) =>
+    fetcher<RoomMember>(`/rooms/${roomId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
   updateMemberRole: (roomId: string, userId: string, role: UserRole) =>
     fetcher<RoomMember>(`/rooms/${roomId}/members/${userId}/role`, {
       method: 'PUT',
@@ -84,19 +89,34 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  addShiftTime: (roomId: string, type: ShiftType, date: string) =>
-    fetcher<ShiftTime>(`/rooms/${roomId}/times`, {
+  removeLocation: (roomId: string, locationId: string) =>
+    fetcher<{ message: string }>(`/rooms/${roomId}/locations/${locationId}`, {
+      method: 'DELETE',
+    }),
+
+  addTimeBlock: (roomId: string, name: string, startTime: string, endTime: string) =>
+    fetcher<TimeBlock>(`/rooms/${roomId}/time-blocks`, {
       method: 'POST',
-      body: JSON.stringify({ type, date }),
+      body: JSON.stringify({ name, start_time: startTime, end_time: endTime }),
+    }),
+
+  removeTimeBlock: (roomId: string, blockId: string) =>
+    fetcher<{ message: string }>(`/rooms/${roomId}/time-blocks/${blockId}`, {
+      method: 'DELETE',
     }),
 
   assignShift: (
     roomId: string,
-    data: { shift_time_id: string; shift_location_id: string; user_id: string },
+    data: { time_block_id: string; shift_location_id: string; user_id: string; date: string },
   ) =>
     fetcher<ShiftAssignment>(`/rooms/${roomId}/assignments`, {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+
+  removeAssignment: (roomId: string, assignmentId: string) =>
+    fetcher<{ message: string }>(`/rooms/${roomId}/assignments/${assignmentId}`, {
+      method: 'DELETE',
     }),
 
   getSchedule: (roomId: string) =>

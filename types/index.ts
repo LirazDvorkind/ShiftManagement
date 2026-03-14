@@ -4,7 +4,6 @@
  */
 
 export type UserRole = 'ADMIN' | 'PARTICIPANT';
-export type ShiftType = 'MORNING' | 'EVENING' | 'NIGHT';
 
 export interface AuthUser {
   userId: string;
@@ -22,10 +21,18 @@ export interface Room {
   created_at: string;
 }
 
+export interface TimeBlock {
+  id: string;
+  room_id: string;
+  name: string;
+  start_time: string;  // "HH:MM"
+  end_time: string;    // "HH:MM"
+}
+
 export interface RoomDetail extends Room {
   members: RoomMember[];
   locations: ShiftLocation[];
-  shift_times: ShiftTime[];
+  time_blocks: TimeBlock[];
 }
 
 export interface RoomMember {
@@ -41,26 +48,20 @@ export interface ShiftLocation {
   name: string;
 }
 
-export interface ShiftTime {
-  id: string;
-  room_id: string;
-  type: ShiftType;
-  date: string;
-}
-
 export interface ShiftAssignment {
   id: string;
   room_id: string;
-  shift_time_id: string;
+  time_block_id: string;
   shift_location_id: string;
   user_id: string;
+  date: string;  // "YYYY-MM-DD"
   user?: User;
   location?: ShiftLocation;
-  time?: ShiftTime;
+  time_block?: TimeBlock;
 }
 
 export interface FullSchedule {
   locations: ShiftLocation[];
-  times: ShiftTime[];
+  time_blocks: TimeBlock[];
   assignments: ShiftAssignment[];
 }

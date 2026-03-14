@@ -204,7 +204,15 @@ export default function RoomPage() {
             <h2 className="text-2xl font-bold text-gray-900">Shift Schedule</h2>
             <p className="text-gray-500">Overview of all shift assignments for this room.</p>
           </div>
-          {schedule && <ScheduleView schedule={schedule} />}
+          {schedule && (
+          <ScheduleView
+            roomId={id}
+            schedule={schedule}
+            members={members}
+            isAdmin={currentUserRole === 'ADMIN'}
+            onRefresh={fetchData}
+          />
+        )}
         </section>
 
         {currentUserRole === 'ADMIN' && (
@@ -212,7 +220,7 @@ export default function RoomPage() {
             <AdminPanel
               roomId={id}
               locations={schedule?.locations ?? []}
-              times={schedule?.times ?? []}
+              timeBlocks={schedule?.time_blocks ?? []}
               members={members}
               onRefresh={fetchData}
             />
