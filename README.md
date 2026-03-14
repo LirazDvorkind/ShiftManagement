@@ -1,16 +1,19 @@
 # ShiftManager
 
-A collaborative shift scheduling tool. Enter a room number to join an existing room or create a new one. Admins define locations and time blocks, assign people to shifts, and everyone sees the result in a color-coded weekly calendar.
+A collaborative shift scheduling tool. Enter your name to sign in, then enter a room number to join an existing room or create a new one. Admins define locations and time slots, assign people to shifts, and everyone sees the result in a color-coded weekly calendar.
 
 ## Features
 
 - **Room numbers** — rooms are identified by a number you choose (e.g. `/room/100`). Enter a number to join an existing room or create it
-- **Passwordless auth** — log in with just a name; no passwords
-- **Locations & time blocks** — define reusable named time blocks (e.g. "Morning 08:00–16:00") alongside locations, both managed as simple lists
-- **Weekly calendar** — assignments displayed in a 7-day grid, grouped by time block within each day
+- **Passwordless auth** — log in with just a name; no passwords. The same name always returns you to your account
+- **Locations & time slots** — define reusable named time slots (e.g. "Morning 08:00–16:00") alongside locations, both managed as simple lists
+- **Rename anything** — admins can rename locations, time slots, and people inline; duplicate names are prevented
+- **Weekly calendar** — assignments displayed in a 7-day grid, grouped by time slot within each day
 - **Color-coded people** — each person gets a distinct color across the calendar
-- **Admin controls** — add/remove locations, time blocks, and people; assign and remove shifts inline from the calendar
+- **Admin controls** — add/remove/rename locations, time slots, and people; assign and remove shifts inline from the calendar
 - **Add people directly** — admins can add someone by name without waiting for them to join; an account is created automatically if the person hasn't registered yet
+- **Duplicate prevention** — adding a person or location/time slot that already exists is blocked with a clear error
+- **Manager dashboard** — a password-protected view for listing and deleting all rooms
 
 ## Tech Stack
 
@@ -181,7 +184,7 @@ If you want one Railway service serving both the API and frontend, you need a pr
   page.tsx          Landing — enter a room number to join or create
 
 /components/
-  AdminPanel.tsx    Admin controls (locations, time blocks, people, assignments)
+  AdminPanel.tsx    Admin controls (locations, time slots, people, assignments, rename)
   ScheduleView.tsx  Weekly calendar view with color-coded assignments
 
 /src/               Express API
@@ -203,7 +206,7 @@ If you want one Railway service serving both the API and frontend, you need a pr
 | Model | Description |
 |-------|-------------|
 | `Room` | Scheduling namespace. Identified by a user-chosen integer `number` (e.g. 100) |
-| `TimeBlock` | Reusable named time slot with start/end times (e.g. "Morning", 08:00–16:00) |
+| `TimeBlock` | Reusable named time slot with start/end times (e.g. "Morning", 08:00–16:00). Displayed as "Time Slot" in the UI |
 | `ShiftLocation` | A named place within a room (e.g. "Front Desk") |
 | `ShiftAssignment` | Links a person to a location + time block on a specific date |
 | `RoomMember` | User–room join with role: `ADMIN` or `PARTICIPANT` |
@@ -223,12 +226,15 @@ Admin-only endpoints require the `ADMIN` role in that room.
 | `GET` | `/api/rooms/:number` | member | Get room details |
 | `POST` | `/api/rooms/:number/join` | ✓ | Join room as participant |
 | `POST` | `/api/rooms/:number/members` | admin | Add person by name (creates account if needed) |
+| `PATCH` | `/api/rooms/:number/members/:userId/name` | admin | Rename person |
 | `PUT` | `/api/rooms/:number/members/:userId/role` | admin | Change member role |
 | `DELETE` | `/api/rooms/:number/members/:userId` | admin | Remove member |
 | `POST` | `/api/rooms/:number/locations` | admin | Add location |
+| `PATCH` | `/api/rooms/:number/locations/:id` | admin | Rename location |
 | `DELETE` | `/api/rooms/:number/locations/:id` | admin | Remove location |
-| `POST` | `/api/rooms/:number/time-blocks` | admin | Add time block |
-| `DELETE` | `/api/rooms/:number/time-blocks/:id` | admin | Remove time block |
+| `POST` | `/api/rooms/:number/time-blocks` | admin | Add time slot |
+| `PATCH` | `/api/rooms/:number/time-blocks/:id` | admin | Rename time slot |
+| `DELETE` | `/api/rooms/:number/time-blocks/:id` | admin | Remove time slot |
 | `POST` | `/api/rooms/:number/assignments` | admin | Assign a shift |
 | `DELETE` | `/api/rooms/:number/assignments/:id` | admin | Remove a shift |
 | `GET` | `/api/rooms/:number/schedule` | member | Get full schedule |
