@@ -140,24 +140,24 @@ export default function RoomPage() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center text-white hover:bg-blue-700 transition-colors">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link href="/" className="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center text-white hover:bg-blue-700 transition-colors shrink-0">
                 <Layout className="w-5 h-5" />
               </Link>
-              <h1 className="text-xl font-bold text-gray-900">{room?.name}</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">{room?.name}</h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <button
                 onClick={handleCopyLink}
                 title="Copy share link"
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors border border-gray-200"
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 px-2 sm:px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors border border-gray-200"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? 'Copied!' : 'Share link'}
+                <span className="hidden sm:inline">{copied ? 'Copied!' : 'Share link'}</span>
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <div className="flex items-center gap-1 text-xs text-gray-500">
                   <Users className="w-3.5 h-3.5" />
                   <span>{members.length}</span>
@@ -172,10 +172,10 @@ export default function RoomPage() {
               </span>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors px-3 py-1.5 rounded-lg"
+                className="flex items-center gap-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors px-2 sm:px-3 py-1.5 rounded-lg"
               >
                 <LogOut className="w-4 h-4" />
-                Sign out
+                <span className="hidden sm:inline">Sign out</span>
               </button>
             </div>
           </div>

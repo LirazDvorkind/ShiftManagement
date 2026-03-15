@@ -148,29 +148,29 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
   return (
     <div className="space-y-4">
       {/* Week navigation */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
           <button
             onClick={prevWeek}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0"
             title="Previous week"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={nextWeek}
-            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0"
             title="Next week"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
-          <span className="text-base font-semibold text-gray-800">
+          <span className="text-sm sm:text-base font-semibold text-gray-800 truncate">
             {formatWeekRange(weekStart)}
           </span>
         </div>
         <button
           onClick={goToday}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shrink-0"
         >
           Today
         </button>
@@ -188,7 +188,7 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
       )}
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-7 gap-2">
         {dates.map((date) => {
           const isToday = date === today;
           const dayAssignments = assignments.filter(a => a.date === date);
@@ -196,26 +196,44 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
           return (
             <div
               key={date}
-              className={`rounded-xl border p-3 min-h-[160px] ${
+              className={`rounded-xl border p-3 md:min-h-[160px] ${
                 isToday ? 'border-indigo-300 bg-indigo-50' : 'border-gray-200 bg-white'
               }`}
             >
-              {/* Day header */}
+              {/* Day header — horizontal on mobile, vertical on desktop */}
               <div className="mb-2">
-                <p className={`text-xs font-semibold uppercase tracking-wider ${isToday ? 'text-indigo-600' : 'text-gray-400'}`}>
-                  {weekdayName(date).slice(0, 3)}
-                </p>
-                <p className={`text-lg font-bold leading-none ${isToday ? 'text-indigo-700' : 'text-gray-800'}`}>
-                  {date.split('-')[2]}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-IL', { month: 'short', timeZone: TZ })}
-                </p>
+                {/* Mobile */}
+                <div className="flex items-center gap-2 md:hidden">
+                  <span className={`text-sm font-bold ${isToday ? 'text-indigo-700' : 'text-gray-800'}`}>
+                    {weekdayName(date)}
+                  </span>
+                  <span className={`text-xs ${isToday ? 'text-indigo-500' : 'text-gray-400'}`}>
+                    {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-IL', { month: 'short', day: 'numeric', timeZone: TZ })}
+                  </span>
+                  {isToday && (
+                    <span className="ml-auto text-[10px] font-semibold bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
+                      Today
+                    </span>
+                  )}
+                </div>
+                {/* Desktop */}
+                <div className="hidden md:block">
+                  <p className={`text-xs font-semibold uppercase tracking-wider ${isToday ? 'text-indigo-600' : 'text-gray-400'}`}>
+                    {weekdayName(date).slice(0, 3)}
+                  </p>
+                  <p className={`text-lg font-bold leading-none ${isToday ? 'text-indigo-700' : 'text-gray-800'}`}>
+                    {date.split('-')[2]}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-IL', { month: 'short', timeZone: TZ })}
+                  </p>
+                </div>
               </div>
 
               {/* Assignments grouped by time block */}
               {dayAssignments.length === 0 ? (
-                <p className="text-xs text-gray-300 italic">—</p>
+                // On desktop show a placeholder dash; on mobile the date header is enough
+                <p className="hidden md:block text-xs text-gray-300 italic">—</p>
               ) : (
                 <div className="space-y-2">
                   {time_blocks.map(block => {
@@ -224,13 +242,14 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
                     return (
                       <div key={block.id}>
-                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">
+                        {/* Time block label — slightly larger on mobile where we have full width */}
+                        <p className="text-xs md:text-[10px] font-semibold text-gray-500 md:text-gray-400 uppercase tracking-wide mb-1.5 md:mb-1">
                           {block.name}
-                          <span className="font-normal normal-case ml-1 text-gray-300">
+                          <span className="font-normal normal-case ml-1 text-gray-400 md:text-gray-300">
                             {block.start_time}–{block.end_time}
                           </span>
                         </p>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5 md:space-y-1">
                           {blockAssignments.map(assignment => {
                             const colorIdx = userColorMap.get(assignment.user_id) ?? 0;
                             const color = getUserColor(colorIdx);
@@ -239,27 +258,33 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                             return (
                               <div
                                 key={assignment.id}
-                                className={`flex items-start justify-between gap-1 px-2 py-1 rounded-md text-xs ${color.bg} ${color.text} group`}
+                                className={`flex items-center md:items-start justify-between gap-2 md:gap-1 px-2 py-2 md:py-1 rounded-md text-sm md:text-xs ${color.bg} ${color.text} group`}
                               >
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1">
-                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${color.dot}`} />
+                                {/*
+                                  Mobile: single inline row — "● Name · Location"
+                                  Desktop: stacked — name on top, location below
+                                */}
+                                <div className="flex items-center gap-1.5 md:flex-col md:items-start md:gap-0 min-w-0">
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    <span className={`w-2 h-2 md:w-1.5 md:h-1.5 rounded-full shrink-0 ${color.dot}`} />
                                     <span className="font-medium truncate">
                                       {assignment.user?.name || '—'}
                                     </span>
                                   </div>
-                                  <div className="text-[10px] opacity-70 pl-2.5 truncate">
+                                  <span className="opacity-30 shrink-0 md:hidden">·</span>
+                                  <span className="text-xs md:text-[10px] opacity-70 md:pl-2.5 truncate">
                                     {assignment.location?.name || '—'}
-                                  </div>
+                                  </span>
                                 </div>
                                 {isAdmin && (
                                   <button
                                     onClick={() => handleRemove(assignment)}
                                     disabled={isRemoving}
-                                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-current hover:text-red-600 disabled:opacity-50 p-0.5 rounded"
+                                    // Always visible on touch (no hover); fade in on desktop hover
+                                    className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-current hover:text-red-600 disabled:opacity-50 p-0.5 rounded"
                                     title="Remove shift"
                                   >
-                                    <X className="w-3 h-3" />
+                                    <X className="w-4 h-4 md:w-3 md:h-3" />
                                   </button>
                                 )}
                               </div>

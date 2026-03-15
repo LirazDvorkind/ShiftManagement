@@ -90,7 +90,9 @@ export default function ManagerPage() {
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="relative">
               <input
-                type={showPw ? 'text' : 'password'}
+                type="text"
+                autoComplete="off"
+                style={!showPw ? { WebkitTextSecurity: 'disc' } as React.CSSProperties : undefined}
                 className={`w-full px-4 py-2.5 border rounded-lg text-sm pr-10 outline-none focus:ring-2 focus:ring-indigo-500 transition ${loginErr ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
                 placeholder="Password"
                 value={password}
