@@ -53,6 +53,9 @@ lerna-debug.log*
 .env.production.local
 .env.sync
 
+# Claude Code
+.claude/
+
 # IDEs / Editors
 .vscode/
 .idea/
