@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { RoomMember } from '@/types';
-import { Calendar, Copy, Check, RefreshCw, ExternalLink } from 'lucide-react';
+import { Calendar, Copy, Check, RefreshCw, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
 interface CalendarExportProps {
@@ -21,6 +21,31 @@ const API_HOST =
     ? (process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ?? window.location.origin)
     : '';
 
+function toDateStr(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function getWeekMonday(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function formatWeekLabel(monday: Date): string {
+  const sunday = addDays(monday, 6);
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  return `${monday.toLocaleDateString(undefined, opts)} – ${sunday.toLocaleDateString(undefined, opts)}`;
+}
+
 export default function CalendarExport({ roomId, members }: CalendarExportProps) {
   const { user } = useAuth();
   const [token, setToken] = useState<string | null>(null);
@@ -28,38 +53,41 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
-  // Default to the signed-in user
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const currentWeekMonday = getWeekMonday(today);
+
+  const [weekMonday, setWeekMonday] = useState<Date>(currentWeekMonday);
+
+  const isCurrentWeek = toDateStr(weekMonday) === toDateStr(currentWeekMonday);
+  const from = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
+  const to = toDateStr(addDays(weekMonday, 6));
+
+  // Default to signed-in user
   useEffect(() => {
-    if (user && !selectedUserId) {
-      setSelectedUserId(user.userId);
-    }
+    if (user && !selectedUserId) setSelectedUserId(user.userId);
   }, [user, selectedUserId]);
 
   useEffect(() => {
     api.getCalendarToken().then((res) => setToken(res.token)).catch(() => {});
   }, []);
 
-  function buildWebcalUrl() {
-    if (!token) return '';
-    const base = API_HOST.replace(/^https?/, 'webcal');
-    const params = new URLSearchParams({ roomId });
+  function buildParams() {
+    const params = new URLSearchParams({ roomId, from, to });
     if (selectedUserId && selectedUserId !== user?.userId) {
       params.set('userId', selectedUserId);
     }
-    return `${base}/api/calendar/${token}.ics?${params.toString()}`;
+    return params.toString();
+  }
+
+  function buildWebcalUrl() {
+    if (!token) return '';
+    return `${API_HOST.replace(/^https?/, 'webcal')}/api/calendar/${token}.ics?${buildParams()}`;
   }
 
   function buildHttpsUrl() {
     if (!token) return '';
-    const params = new URLSearchParams({ roomId });
-    if (selectedUserId && selectedUserId !== user?.userId) {
-      params.set('userId', selectedUserId);
-    }
-    return `${API_HOST}/api/calendar/${token}.ics?${params.toString()}`;
-  }
-
-  function handleAddToCalendar() {
-    window.location.href = buildWebcalUrl();
+    return `${API_HOST}/api/calendar/${token}.ics?${buildParams()}`;
   }
 
   function handleCopy() {
@@ -88,7 +116,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
       </div>
 
       <p className="text-sm text-gray-500">
-        Subscribe to shifts in your calendar app. The feed updates automatically.
+        Export shifts to your calendar app for the selected week.
       </p>
 
       {/* Member picker */}
@@ -111,10 +139,56 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
         </select>
       </div>
 
+      {/* Week picker */}
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-gray-600">Week</label>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setWeekMonday((w) => addDays(w, -7))}
+            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4 text-gray-600" />
+          </button>
+
+          <span className="flex-1 text-center text-sm font-medium text-gray-800">
+            {isCurrentWeek ? (
+              <span>
+                This week{' '}
+                <span className="text-gray-400 font-normal">({formatWeekLabel(weekMonday)})</span>
+              </span>
+            ) : (
+              formatWeekLabel(weekMonday)
+            )}
+          </span>
+
+          <button
+            onClick={() => setWeekMonday((w) => addDays(w, 7))}
+            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4 text-gray-600" />
+          </button>
+
+          {!isCurrentWeek && (
+            <button
+              onClick={() => setWeekMonday(currentWeekMonday)}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Today
+            </button>
+          )}
+        </div>
+
+        <p className="text-xs text-gray-400">
+          {isCurrentWeek
+            ? `From today (${from}) to ${to}`
+            : `${from} to ${to}`}
+        </p>
+      </div>
+
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
         <button
-          onClick={handleAddToCalendar}
+          onClick={() => { window.location.href = buildWebcalUrl(); }}
           className="flex items-center gap-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
         >
           <ExternalLink className="w-4 h-4" />
@@ -143,7 +217,6 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
       <p className="text-xs text-gray-400">
         Google Calendar on web: paste the link into{' '}
         <span className="font-medium text-gray-500">Other calendars → From URL</span>.
-        The feed refreshes every 12 hours.
       </p>
     </div>
   );

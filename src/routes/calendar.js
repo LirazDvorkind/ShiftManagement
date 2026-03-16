@@ -64,7 +64,7 @@ router.get("/:calendarTokenFile", async (req, res, next) => {
     }
     const calendarToken = calendarTokenFile.slice(0, -4);
 
-    const { roomId, userId: targetUserIdParam } = req.query;
+    const { roomId, userId: targetUserIdParam, from, to } = req.query;
     if (!roomId) return res.status(400).json({ error: "roomId query parameter is required." });
 
     // Authenticate via token
@@ -102,9 +102,14 @@ router.get("/:calendarTokenFile", async (req, res, next) => {
     const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!targetUser) return res.status(404).json({ error: "Target user not found." });
 
-    // Fetch assignments for target user in this room
+    // Fetch assignments for target user in this room, optionally filtered by date range
     const assignments = await prisma.shiftAssignment.findMany({
-      where: { roomId, userId: targetUserId },
+      where: {
+        roomId,
+        userId: targetUserId,
+        ...(from && { date: { gte: from } }),
+        ...(to && { date: { lte: to } }),
+      },
       include: { timeBlock: true, shiftLocation: true },
     });
 
