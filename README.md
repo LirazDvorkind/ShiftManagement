@@ -31,31 +31,56 @@ A collaborative shift scheduling tool. Enter your name to sign in, then enter a 
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL running locally (or use a remote connection string)
+- Docker (recommended) or a local PostgreSQL installation
 
-### 1. Install dependencies
+### 1. Start the database
+
+The quickest way is Docker. Run once to create the container:
+
+```bash
+docker run --name shiftmanagement-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=postgres \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+On subsequent sessions, just start the existing container:
+
+```bash
+docker start shiftmanagement-db
+```
+
+To stop it when you're done:
+
+```bash
+docker stop shiftmanagement-db
+```
+
+### 2. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Configure environment
+### 3. Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+The default `.env` works out of the box with the Docker container above:
 
 ```env
-DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/shiftmanager"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/postgres"
 JWT_SECRET="any-long-random-string"
 JWT_EXPIRES_IN="7d"
 PORT=3001
 NODE_ENV="development"
 ```
 
-### 3. Push schema to database
+### 4. Push schema to database
 
 ```bash
 npm run db:push
@@ -63,7 +88,7 @@ npm run db:push
 
 This creates all tables. Safe to re-run — only applies missing changes.
 
-### 4. Start dev servers
+### 5. Start dev servers
 
 ```bash
 npm run dev

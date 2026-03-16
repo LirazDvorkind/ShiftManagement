@@ -159,4 +159,10 @@ export const api = {
 
   getSchedule: (roomId: string) =>
     fetcher<FullSchedule>(`/rooms/${roomId}/schedule`),
+
+  getCalendarToken: () =>
+    fetcher<{ token: string }>('/calendar/token'),
+
+  regenerateCalendarToken: () =>
+    fetcher<{ token: string }>('/calendar/token/regenerate', { method: 'POST' }),
 };

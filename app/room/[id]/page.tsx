@@ -20,6 +20,7 @@ import { useAuth } from '@/context/AuthContext';
 import { RoomDetail, RoomMember, FullSchedule, UserRole } from '@/types';
 import AdminPanel from '@/components/AdminPanel';
 import ScheduleView from '@/components/ScheduleView';
+import CalendarExport from '@/components/CalendarExport';
 import { Users, Layout, ShieldAlert, Loader2, LogOut, Copy, Check, AlertCircle } from 'lucide-react';
 
 export default function RoomPage() {
@@ -197,6 +198,10 @@ export default function RoomPage() {
             onRefresh={fetchData}
           />
         )}
+        </section>
+
+        <section>
+          <CalendarExport roomId={id} members={members} />
         </section>
 
         {currentUserRole === 'ADMIN' && (
