@@ -49,6 +49,7 @@ function formatWeekLabel(monday: Date): string {
 export default function CalendarExport({ roomId, members }: CalendarExportProps) {
   const { user } = useAuth();
   const [token, setToken] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
@@ -58,10 +59,38 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
   const currentWeekMonday = getWeekMonday(today);
 
   const [weekMonday, setWeekMonday] = useState<Date>(currentWeekMonday);
+  const [isCustomRange, setIsCustomRange] = useState(false);
 
-  const isCurrentWeek = toDateStr(weekMonday) === toDateStr(currentWeekMonday);
-  const from = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
-  const to = toDateStr(addDays(weekMonday, 6));
+  const isCurrentWeek = !isCustomRange && toDateStr(weekMonday) === toDateStr(currentWeekMonday);
+  const weekFrom = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
+  const weekTo = toDateStr(addDays(weekMonday, 6));
+
+  const [from, setFrom] = useState<string>(weekFrom);
+  const [to, setTo] = useState<string>(weekTo);
+
+  // Sync from/to when week changes (but not when user has typed custom dates)
+  useEffect(() => {
+    if (!isCustomRange) {
+      setFrom(isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday));
+      setTo(toDateStr(addDays(weekMonday, 6)));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekMonday, isCustomRange]);
+
+  function goToWeek(monday: Date) {
+    setWeekMonday(monday);
+    setIsCustomRange(false);
+  }
+
+  function handleFromChange(val: string) {
+    setFrom(val);
+    setIsCustomRange(true);
+  }
+
+  function handleToChange(val: string) {
+    setTo(val);
+    setIsCustomRange(true);
+  }
 
   // Default to signed-in user
   useEffect(() => {
@@ -69,7 +98,9 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
   }, [user, selectedUserId]);
 
   useEffect(() => {
-    api.getCalendarToken().then((res) => setToken(res.token)).catch(() => {});
+    api.getCalendarToken()
+      .then((res) => setToken(res.token))
+      .catch((err) => setTokenError(err?.message ?? 'Failed to load calendar token'));
   }, []);
 
   function buildParams() {
@@ -106,7 +137,20 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
     }
   }
 
-  if (!token) return null;
+  if (!token) {
+    if (tokenError) {
+      return (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-5 h-5 text-blue-600" />
+            <h3 className="text-base font-semibold text-gray-900">Add to Calendar</h3>
+          </div>
+          <p className="text-sm text-red-500">Calendar unavailable: {tokenError}</p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
@@ -116,7 +160,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
       </div>
 
       <p className="text-sm text-gray-500">
-        Export shifts to your calendar app for the selected week.
+        Export shifts to your calendar app for the selected date range.
       </p>
 
       {/* Member picker */}
@@ -140,18 +184,33 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
       </div>
 
       {/* Week picker */}
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-gray-600">Week</label>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-gray-600">Date range</label>
+          {isCustomRange && (
+            <button
+              onClick={() => goToWeek(currentWeekMonday)}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Reset to this week
+            </button>
+          )}
+        </div>
+
+        {/* Week navigation */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setWeekMonday((w) => addDays(w, -7))}
+            onClick={() => goToWeek(addDays(weekMonday, -7))}
             className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            title="Previous week"
           >
             <ChevronLeft className="w-4 h-4 text-gray-600" />
           </button>
 
           <span className="flex-1 text-center text-sm font-medium text-gray-800">
-            {isCurrentWeek ? (
+            {isCustomRange ? (
+              <span className="text-gray-400 font-normal">Custom range</span>
+            ) : isCurrentWeek ? (
               <span>
                 This week{' '}
                 <span className="text-gray-400 font-normal">({formatWeekLabel(weekMonday)})</span>
@@ -162,15 +221,16 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
           </span>
 
           <button
-            onClick={() => setWeekMonday((w) => addDays(w, 7))}
+            onClick={() => goToWeek(addDays(weekMonday, 7))}
             className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+            title="Next week"
           >
             <ChevronRight className="w-4 h-4 text-gray-600" />
           </button>
 
-          {!isCurrentWeek && (
+          {!isCurrentWeek && !isCustomRange && (
             <button
-              onClick={() => setWeekMonday(currentWeekMonday)}
+              onClick={() => goToWeek(currentWeekMonday)}
               className="text-xs text-blue-600 hover:underline"
             >
               Today
@@ -178,11 +238,30 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
           )}
         </div>
 
-        <p className="text-xs text-gray-400">
-          {isCurrentWeek
-            ? `From today (${from}) to ${to}`
-            : `${from} to ${to}`}
-        </p>
+        {/* Manual date inputs */}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 space-y-0.5">
+            <label className="text-xs text-gray-400" htmlFor="cal-from">From</label>
+            <input
+              id="cal-from"
+              type="date"
+              value={from}
+              onChange={(e) => handleFromChange(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <span className="text-gray-400 mt-4">–</span>
+          <div className="flex-1 space-y-0.5">
+            <label className="text-xs text-gray-400" htmlFor="cal-to">To</label>
+            <input
+              id="cal-to"
+              type="date"
+              value={to}
+              onChange={(e) => handleToChange(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
       </div>
 
       {/* Action buttons */}
