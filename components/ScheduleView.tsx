@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { FullSchedule, ShiftAssignment, RoomMember } from '@/types';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertCircle } from 'lucide-react';
 import { api } from '@/lib/api';
+import { TZ, weekDates, todayStr, dateToDisplay, getWeekStart, getRelativeWeekLabel } from '@/lib/dateUtils';
 
 // 10 distinct user colors (bg, text, dot)
 const USER_COLOR_CLASSES = [
@@ -28,8 +29,6 @@ function getUserColor(index: number) {
   return USER_COLOR_CLASSES[index % USER_COLOR_CLASSES.length];
 }
 
-const TZ = 'Asia/Jerusalem';
-
 /** Format "YYYY-MM-DD" to "Mon, Mar 10" in Israel time */
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -44,47 +43,16 @@ function weekdayName(dateStr: string): string {
   return d.toLocaleDateString('en-IL', { weekday: 'long', timeZone: TZ });
 }
 
-/** Get Sunday of the week containing `date`, anchored to Israel time */
-function getWeekStart(date: Date): Date {
-  // Get Israel's current date string, then build a local midnight from it
-  const israelDateStr = date.toLocaleDateString('en-CA', { timeZone: TZ }); // "YYYY-MM-DD"
-  const [year, month, day] = israelDateStr.split('-').map(Number);
-  const d = new Date(year, month - 1, day);
-  const dow = d.getDay(); // 0=Sun, 1=Mon ...
-  d.setDate(d.getDate() - dow); // roll back to Sunday
-  return d;
-}
-
-/** Return 7 date strings ("YYYY-MM-DD") starting from Monday */
-function weekDates(weekStart: Date): string[] {
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + i);
-    // Format as YYYY-MM-DD using local date parts (weekStart is local midnight)
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  });
-}
-
-/** Format a Date as "DD/MM/YYYY" */
-function fmtDate(d: Date): string {
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  return `${day}/${month}/${d.getFullYear()}`;
-}
-
-/** Format week range as "DD/MM/YYYY – DD/MM/YYYY" */
-function formatWeekRange(weekStart: Date): string {
+/** Format week range as "Descriptive Label (DD/MM/YYYY – DD/MM/YYYY)" */
+function formatWeekRange(weekStart: Date): React.ReactNode {
   const end = new Date(weekStart);
   end.setDate(end.getDate() + 6);
-  return `${fmtDate(weekStart)} – ${fmtDate(end)}`;
-}
-
-/** Today as "YYYY-MM-DD" in Israel time */
-function todayStr(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  const relative = getRelativeWeekLabel(weekStart);
+  return (
+    <span>
+      {relative} <span className="text-gray-400 font-normal ml-1">({dateToDisplay(weekStart)} – {dateToDisplay(end)})</span>
+    </span>
+  );
 }
 
 interface ScheduleViewProps {
@@ -93,12 +61,13 @@ interface ScheduleViewProps {
   members: RoomMember[];
   isAdmin: boolean;
   onRefresh: () => void;
+  weekStart: Date;
+  onWeekChange: (date: Date) => void;
 }
 
-export default function ScheduleView({ roomId, schedule, members, isAdmin, onRefresh }: ScheduleViewProps) {
+export default function ScheduleView({ roomId, schedule, members, isAdmin, onRefresh, weekStart, onWeekChange }: ScheduleViewProps) {
   const { locations, time_blocks, assignments } = schedule;
 
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState('');
 
@@ -112,16 +81,16 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
   const prevWeek = () => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() - 7);
-    setWeekStart(d);
+    onWeekChange(d);
   };
 
   const nextWeek = () => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + 7);
-    setWeekStart(d);
+    onWeekChange(d);
   };
 
-  const goToday = () => setWeekStart(getWeekStart(new Date()));
+  const goToday = () => onWeekChange(getWeekStart(new Date()));
 
   const handleRemove = async (assignment: ShiftAssignment) => {
     setRemovingId(assignment.id);

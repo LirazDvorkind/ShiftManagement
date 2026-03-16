@@ -3,10 +3,11 @@
  * @description Admin controls for managing room configurations and assignments.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { ShiftLocation, TimeBlock, RoomMember } from '@/types';
 import { MapPin, Clock, UserPlus, ShieldCheck, Trash2, Plus, Users, Calendar, Check, Loader2, AlertCircle, Pencil, X } from 'lucide-react';
+import { isoToDisplay } from '@/lib/dateUtils';
 
 interface AdminPanelProps {
   roomId: string;
@@ -16,6 +17,8 @@ interface AdminPanelProps {
   members: RoomMember[];
   onRefresh: () => void;
   onRoomDeleted: () => void;
+  selectedDate: string;
+  onDateChange: (date: string) => void;
 }
 
 type BtnState = 'idle' | 'loading' | 'success';
@@ -94,7 +97,17 @@ function isValidDisplayDate(display: string): boolean {
 
 // --- Component ---
 
-export default function AdminPanel({ roomId, currentUserId, locations, timeBlocks, members, onRefresh, onRoomDeleted }: AdminPanelProps) {
+export default function AdminPanel({
+  roomId,
+  currentUserId,
+  locations,
+  timeBlocks,
+  members,
+  onRefresh,
+  onRoomDeleted,
+  selectedDate,
+  onDateChange,
+}: AdminPanelProps) {
   const sortedLocations = [...locations].sort((a, b) => a.name.localeCompare(b.name));
   const sortedTimeBlocks = [...timeBlocks].sort((a, b) => a.name.localeCompare(b.name));
   const sortedMembers = [...members].sort((a, b) => (a.user?.name ?? '').localeCompare(b.user?.name ?? ''));
@@ -122,12 +135,12 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
   const [dateErr, setDateErr] = useState('');
   const [assignErr, setAssignErr] = useState('');
 
-  const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-  const [selectedDate, setSelectedDate] = useState(todayIso);
-  const [displayDate,  setDisplayDate]  = useState(() => {
-    const [y, m, d] = todayIso.split('-');
-    return `${d}/${m}/${y}`;
-  });
+  const [displayDate, setDisplayDate] = useState(() => isoToDisplay(selectedDate));
+
+  // Sync displayDate when selectedDate changes from prop (e.g. week navigation)
+  useEffect(() => {
+    setDisplayDate(isoToDisplay(selectedDate));
+  }, [selectedDate]);
 
   // Member form
   const [newMemberName, setNewMemberName] = useState('');
@@ -506,7 +519,7 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
                     const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw);
                     if (match) {
                       const [, d, m, y] = match;
-                      setSelectedDate(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+                      onDateChange(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
                     }
                   }}
                 />
@@ -517,11 +530,9 @@ export default function AdminPanel({ roomId, currentUserId, locations, timeBlock
                   value={selectedDate}
                   onChange={e => {
                     const iso = e.target.value;
-                    setSelectedDate(iso);
+                    onDateChange(iso);
                     setDateErr('');
                     setAssignErr('');
-                    const [y, m, d] = iso.split('-');
-                    setDisplayDate(`${d}/${m}/${y}`);
                   }}
                 />
               </div>

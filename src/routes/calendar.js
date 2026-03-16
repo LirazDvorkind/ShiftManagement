@@ -1,70 +1,21 @@
 /**
  * @file src/routes/calendar.js
- * @description Calendar token management and ICS feed endpoints.
+ * @description Calendar events JSON endpoint.
  *
- * GET /api/calendar/token          — (auth required) fetch or generate the caller's calendar token
- * POST /api/calendar/token/regenerate — (auth required) rotate the caller's calendar token
- * GET /api/calendar/:calendarToken.ics?roomId=&userId= — public ICS feed (token IS the auth)
+ * GET /api/calendar/events?roomId=&userId=&from=&to= — (auth required) return shift events as JSON
  */
 
 const express = require("express");
-const { randomUUID } = require("crypto");
-const ical = require("ical-generator").default;
 const prisma = require("../lib/prisma");
 const authenticate = require("../middleware/authenticate");
 
 const router = express.Router();
 
 // ---------------------------------------------------------------------------
-// GET /api/calendar/token
+// GET /api/calendar/events
 // ---------------------------------------------------------------------------
-router.get("/token", authenticate, async (req, res, next) => {
+router.get("/events", authenticate, async (req, res, next) => {
   try {
-    let user = await prisma.user.findUnique({ where: { id: req.user.userId } });
-    if (!user) return res.status(401).json({ error: "User not found." });
-
-    if (!user.calendarToken) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { calendarToken: randomUUID() },
-      });
-    }
-
-    res.json({ token: user.calendarToken });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/calendar/token/regenerate
-// ---------------------------------------------------------------------------
-router.post("/token/regenerate", authenticate, async (req, res, next) => {
-  try {
-    const user = await prisma.user.update({
-      where: { id: req.user.userId },
-      data: { calendarToken: randomUUID() },
-    });
-
-    res.json({ token: user.calendarToken });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// GET /api/calendar/:calendarToken.ics
-// ---------------------------------------------------------------------------
-router.get("/:calendarTokenFile", async (req, res, next) => {
-  try {
-    const { calendarTokenFile } = req.params;
-
-    // Strip the .ics extension
-    if (!calendarTokenFile.endsWith(".ics")) {
-      return res.status(404).json({ error: "Not found." });
-    }
-    const calendarToken = calendarTokenFile.slice(0, -4);
-
     const { roomId, userId: targetUserIdParam, from, to } = req.query;
     if (!roomId) return res.status(400).json({ error: "roomId query parameter is required." });
 
@@ -73,88 +24,63 @@ router.get("/:calendarTokenFile", async (req, res, next) => {
     if (to && !dateRe.test(to)) return res.status(400).json({ error: "Invalid 'to' date. Expected YYYY-MM-DD." });
     if (from && to && from > to) return res.status(400).json({ error: "'from' date must not be after 'to' date." });
 
-    // Authenticate via token
-    const tokenUser = await prisma.user.findUnique({ where: { calendarToken } });
-    if (!tokenUser) return res.status(401).json({ error: "Invalid calendar token." });
+    const requestingUserId = req.user.userId;
+    const targetUserId = targetUserIdParam || requestingUserId;
 
-    // Resolve target user (default to token owner)
-    const targetUserId = targetUserIdParam || tokenUser.id;
-
-    // Verify token owner is a member of the room
     const room = await prisma.room.findUnique({
       where: { id: roomId },
       include: { members: true },
     });
 
-    if (!room) {
-      // Room deleted — signal calendar apps to remove subscription
-      return res.status(410).end();
-    }
+    if (!room) return res.status(404).json({ error: "Room not found." });
 
-    const ownerMembership = room.members.find((m) => m.userId === tokenUser.id);
-    if (!ownerMembership) {
-      // Token owner removed from room — signal calendar apps to remove subscription
-      return res.status(410).end();
-    }
+    const requesterMembership = room.members.find((m) => m.userId === requestingUserId);
+    if (!requesterMembership) return res.status(403).json({ error: "You are not a member of this room." });
 
-    // Verify target user is also a member (when different from token owner)
-    if (targetUserId !== tokenUser.id) {
+    if (targetUserId !== requestingUserId) {
       const targetMembership = room.members.find((m) => m.userId === targetUserId);
-      if (!targetMembership) {
-        return res.status(403).json({ error: "Target user is not a member of this room." });
-      }
+      if (!targetMembership) return res.status(403).json({ error: "Target user is not a member of this room." });
     }
 
     const targetUser = await prisma.user.findUnique({ where: { id: targetUserId } });
     if (!targetUser) return res.status(404).json({ error: "Target user not found." });
 
-    // Fetch assignments for target user in this room, optionally filtered by date range
     const assignments = await prisma.shiftAssignment.findMany({
       where: {
-        roomId,
+        roomId: room.id,
         userId: targetUserId,
-        ...(from && { date: { gte: from } }),
-        ...(to && { date: { lte: to } }),
+        date: {
+          ...(from && { gte: from }),
+          ...(to && { lte: to }),
+        },
       },
       include: { timeBlock: true, shiftLocation: true },
     });
 
-    // Build ICS
-    const calendar = ical({
-      name: `${room.name} - ${targetUser.name}`,
-    });
-
-    calendar.x([{ key: "X-PUBLISHED-TTL", value: "PT12H" }]);
-
-    for (const assignment of assignments) {
+    const events = assignments.map((assignment) => {
       const { date, timeBlock, shiftLocation } = assignment;
 
-      // Parse "YYYY-MM-DD" and "HH:MM" into Date objects
       const [year, month, day] = date.split("-").map(Number);
-      const [startHour, startMin] = timeBlock.startTime.split(":").map(Number);
-      const [endHour, endMin] = timeBlock.endTime.split(":").map(Number);
+      const endIsNextDay = timeBlock.endTime <= timeBlock.startTime;
+      const endDateObj = endIsNextDay
+        ? new Date(year, month - 1, day + 1)
+        : new Date(year, month - 1, day);
 
-      const startDate = new Date(year, month - 1, day, startHour, startMin, 0);
-      const endDate = new Date(year, month - 1, day, endHour, endMin, 0);
+      const endYear = endDateObj.getFullYear();
+      const endMonth = String(endDateObj.getMonth() + 1).padStart(2, "0");
+      const endDay = String(endDateObj.getDate()).padStart(2, "0");
 
-      // Handle overnight shifts (end time < start time)
-      if (endDate <= startDate) {
-        endDate.setDate(endDate.getDate() + 1);
-      }
-
-      const event = calendar.createEvent({
-        summary: `${timeBlock.name} @ ${shiftLocation.name}`,
-        start: startDate,
-        end: endDate,
+      return {
+        name: `${timeBlock.name} @ ${shiftLocation.name}`,
+        startDate: date,
+        startTime: timeBlock.startTime,
+        endDate: `${endYear}-${endMonth}-${endDay}`,
+        endTime: timeBlock.endTime,
         location: shiftLocation.name,
-      });
-      event.uid(`assignment-${assignment.id}@shiftmanagement`);
-    }
+      };
+    });
 
-    res.set("Content-Type", "text/calendar; charset=utf-8");
-    res.set("Content-Disposition", 'attachment; filename="shifts.ics"');
-    res.set("Cache-Control", "public, max-age=3600");
-    res.send(calendar.toString());
+    res.json({ events });
   } catch (err) {
     next(err);
   }

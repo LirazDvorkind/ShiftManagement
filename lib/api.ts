@@ -160,9 +160,10 @@ export const api = {
   getSchedule: (roomId: string) =>
     fetcher<FullSchedule>(`/rooms/${roomId}/schedule`),
 
-  getCalendarToken: () =>
-    fetcher<{ token: string }>('/calendar/token'),
+  getCalendarEvents: (roomId: string, userId: string | null, from: string, to: string) => {
+    const params = new URLSearchParams({ roomId, from, to });
+    if (userId) params.set('userId', userId);
+    return fetcher<{ events: { name: string; startDate: string; startTime: string; endDate: string; endTime: string; location: string }[] }>(`/calendar/events?${params}`);
+  },
 
-  regenerateCalendarToken: () =>
-    fetcher<{ token: string }>('/calendar/token/regenerate', { method: 'POST' }),
 };

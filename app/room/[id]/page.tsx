@@ -11,7 +11,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -22,6 +22,7 @@ import AdminPanel from '@/components/AdminPanel';
 import ScheduleView from '@/components/ScheduleView';
 import CalendarExport from '@/components/CalendarExport';
 import { Users, Layout, ShieldAlert, Loader2, LogOut, Copy, Check, AlertCircle } from 'lucide-react';
+import { getWeekStart, todayStr } from '@/lib/dateUtils';
 
 export default function RoomPage() {
   const { id } = useParams() as { id: string };
@@ -36,6 +37,10 @@ export default function RoomPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Lifted state for synchronization
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [adminSelectedDate, setAdminSelectedDate] = useState(() => todayStr());
 
   // Redirect unauthenticated users to login, preserving the room URL.
   useEffect(() => {
@@ -93,6 +98,25 @@ export default function RoomPage() {
     logout();
     router.replace('/login');
   }
+
+  // Sync handlers
+  const handleWeekChange = useCallback((newWeekStart: Date) => {
+    setWeekStart(newWeekStart);
+
+    // Synchronize AdminPanel's selected date to the start of the week
+    const y = newWeekStart.getFullYear();
+    const m = String(newWeekStart.getMonth() + 1).padStart(2, '0');
+    const d = String(newWeekStart.getDate()).padStart(2, '0');
+    setAdminSelectedDate(`${y}-${m}-${d}`);
+
+    // Refresh data to "re-check" as requested
+    fetchData();
+  }, [fetchData]);
+
+  const handleAdminDateChange = useCallback((newDate: string) => {
+    setAdminSelectedDate(newDate);
+    // Note: Per user request, this does NOT change the week display in ScheduleView.
+  }, []);
 
   // Waiting for localStorage hydration or initial fetch.
   if (authLoading || (loading && !error && !room && user)) {
@@ -189,31 +213,42 @@ export default function RoomPage() {
             <h2 className="text-2xl font-bold text-gray-900">Shift Schedule</h2>
             <p className="text-gray-500">Overview of all shift assignments for this room.</p>
           </div>
-          {schedule && (
+          {schedule && room && (
           <ScheduleView
-            roomId={id}
+            roomId={room.id}
             schedule={schedule}
             members={members}
             isAdmin={currentUserRole === 'ADMIN'}
             onRefresh={fetchData}
+            weekStart={weekStart}
+            onWeekChange={handleWeekChange}
           />
         )}
         </section>
 
         <section>
-          <CalendarExport roomId={id} members={members} />
+          {room && (
+            <CalendarExport 
+              roomId={room.id} 
+              members={members} 
+              weekStart={weekStart} 
+              onWeekChange={handleWeekChange} 
+            />
+          )}
         </section>
 
-        {currentUserRole === 'ADMIN' && (
+        {currentUserRole === 'ADMIN' && room && (
           <section>
             <AdminPanel
-              roomId={id}
+              roomId={room.id}
               currentUserId={user?.userId ?? ''}
               locations={schedule?.locations ?? []}
               timeBlocks={schedule?.time_blocks ?? []}
               members={members}
               onRefresh={fetchData}
               onRoomDeleted={() => router.replace('/')}
+              selectedDate={adminSelectedDate}
+              onDateChange={handleAdminDateChange}
             />
           </section>
         )}
@@ -225,3 +260,4 @@ export default function RoomPage() {
     </div>
   );
 }
+

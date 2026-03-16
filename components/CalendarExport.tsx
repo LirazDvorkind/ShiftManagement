@@ -1,33 +1,35 @@
 /**
  * @file components/CalendarExport.tsx
- * @description "Add to Calendar" UI. Generates a webcal subscription link for any room member.
+ * @description Add shifts to calendar using add-to-calendar-button.
  */
 
 'use client';
 
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { useEffect, useState, useCallback } from 'react';
 import { RoomMember } from '@/types';
-import { Calendar, Copy, Check, RefreshCw, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, CalendarDays, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/lib/api';
+import { AddToCalendarButton } from 'add-to-calendar-button-react';
+import { getWeekStart, todayStr, isoToDisplay, dateToDisplay, getRelativeWeekLabel } from '@/lib/dateUtils';
 
 interface CalendarExportProps {
   roomId: string;
   members: RoomMember[];
+  weekStart: Date;
+  onWeekChange: (date: Date) => void;
 }
 
-const API_HOST =
-  typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ?? window.location.origin)
-    : '';
+type CalendarEvent = {
+  name: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  location: string;
+};
 
 // ── Date helpers ────────────────────────────────────────────────────────────
-
-/** "YYYY-MM-DD" → "DD/MM/YYYY" */
-function isoToDisplay(iso: string): string {
-  const [y, m, d] = iso.split('-');
-  return `${d}/${m}/${y}`;
-}
 
 /** "DD/MM/YYYY" → "YYYY-MM-DD" (returns null if invalid) */
 function displayToIso(display: string): string | null {
@@ -45,75 +47,69 @@ function toDateStr(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getWeekMonday(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-  return d;
-}
-
 function addDays(date: Date, n: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + n);
   return d;
 }
 
-function fmtDate(date: Date): string {
-  return isoToDisplay(toDateStr(date));
-}
-
 function formatWeekLabel(monday: Date): string {
-  return `${fmtDate(monday)} – ${fmtDate(addDays(monday, 6))}`;
+  return `${dateToDisplay(monday)} – ${dateToDisplay(addDays(monday, 6))}`;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export default function CalendarExport({ roomId, members }: CalendarExportProps) {
+export default function CalendarExport({ roomId, members, weekStart, onWeekChange }: CalendarExportProps) {
   const { user } = useAuth();
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [copied, setCopied] = useState(false);
-  const [regenerating, setRegenerating] = useState(false);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const currentWeekMonday = getWeekMonday(today);
-
-  const [weekMonday, setWeekMonday] = useState<Date>(currentWeekMonday);
   const [isCustomRange, setIsCustomRange] = useState(false);
 
-  const isCurrentWeek = !isCustomRange && toDateStr(weekMonday) === toDateStr(currentWeekMonday);
-  const defaultFrom = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
-  const defaultTo = toDateStr(addDays(weekMonday, 6));
+  const currentWeekStart = getWeekStart(new Date());
+  const isCurrentWeek = !isCustomRange && toDateStr(weekStart) === toDateStr(currentWeekStart);
+  
+  const [from, setFrom] = useState(toDateStr(weekStart));
+  const [to, setTo]     = useState(toDateStr(addDays(weekStart, 6)));
+  const [displayFrom, setDisplayFrom] = useState(isoToDisplay(toDateStr(weekStart)));
+  const [displayTo,   setDisplayTo]   = useState(isoToDisplay(toDateStr(addDays(weekStart, 6))));
 
-  // ISO values used in API URLs
-  const [from, setFrom] = useState(defaultFrom);
-  const [to, setTo]     = useState(defaultTo);
-  // Display values shown to the user (DD/MM/YYYY)
-  const [displayFrom, setDisplayFrom] = useState(isoToDisplay(defaultFrom));
-  const [displayTo,   setDisplayTo]   = useState(isoToDisplay(defaultTo));
-
-  const rangeValid = !!from && !!to && from <= to;
-
-  // Sync when week navigation changes (not when user typed custom)
+  // Sync internal range when weekStart changes (and not in custom mode)
   useEffect(() => {
     if (!isCustomRange) {
-      const f = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
-      const t = toDateStr(addDays(weekMonday, 6));
+      const f = toDateStr(weekStart);
+      const t = toDateStr(addDays(weekStart, 6));
       setFrom(f);
       setTo(t);
       setDisplayFrom(isoToDisplay(f));
       setDisplayTo(isoToDisplay(t));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekMonday, isCustomRange]);
+  }, [weekStart, isCustomRange]);
 
-  function goToWeek(monday: Date) {
-    setWeekMonday(monday);
+  const rangeValid = !!from && !!to && from <= to;
+
+  const handleToday = useCallback(() => {
+    onWeekChange(currentWeekStart);
+    const f = todayStr();
+    const t = toDateStr(addDays(currentWeekStart, 6));
+    setFrom(f);
+    setTo(t);
+    setDisplayFrom(isoToDisplay(f));
+    setDisplayTo(isoToDisplay(t));
+    setIsCustomRange(true);
+  }, [onWeekChange, currentWeekStart]);
+
+  const goToFullWeek = useCallback((monday: Date) => {
+    onWeekChange(monday);
     setIsCustomRange(false);
-  }
+  }, [onWeekChange]);
+
+  const goToWeek = useCallback((monday: Date) => {
+    onWeekChange(monday);
+    setIsCustomRange(false);
+  }, [onWeekChange]);
 
   function handleDisplayFromChange(val: string) {
     setDisplayFrom(val);
@@ -141,63 +137,33 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
     setIsCustomRange(true);
   }
 
-  // Default to signed-in user
   useEffect(() => {
     if (user && !selectedUserId) setSelectedUserId(user.userId);
   }, [user, selectedUserId]);
 
   useEffect(() => {
-    api.getCalendarToken()
-      .then((res) => setToken(res.token))
-      .catch((err) => setTokenError(err?.message ?? 'Failed to load calendar token'));
-  }, []);
+    setEvents([]);
+    setEventsError(null);
 
-  function buildParams() {
-    const params = new URLSearchParams({ roomId, from, to });
-    if (selectedUserId && selectedUserId !== user?.userId) params.set('userId', selectedUserId);
-    return params.toString();
-  }
-
-  function buildWebcalUrl() {
-    if (!token) return '';
-    return `${API_HOST.replace(/^https?/, 'webcal')}/api/calendar/${token}.ics?${buildParams()}`;
-  }
-
-  function buildHttpsUrl() {
-    if (!token) return '';
-    return `${API_HOST}/api/calendar/${token}.ics?${buildParams()}`;
-  }
-
-  function handleCopy() {
-    navigator.clipboard.writeText(buildHttpsUrl());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleRegenerate() {
-    setRegenerating(true);
-    try {
-      const res = await api.regenerateCalendarToken();
-      setToken(res.token);
-    } finally {
-      setRegenerating(false);
+    if (!rangeValid || !selectedUserId) {
+      setLoadingEvents(false);
+      return;
     }
-  }
 
-  if (!token) {
-    if (tokenError) {
-      return (
-        <div className="bg-white rounded-2xl border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="w-5 h-5 text-blue-600" />
-            <h3 className="text-base font-semibold text-gray-900">Add to Calendar</h3>
-          </div>
-          <p className="text-sm text-red-500">Calendar unavailable: {tokenError}</p>
-        </div>
-      );
-    }
-    return null;
-  }
+    let cancelled = false;
+    setLoadingEvents(true);
+    const userId = selectedUserId !== user?.userId ? selectedUserId : null;
+    api.getCalendarEvents(roomId, userId, from, to)
+      .then((data) => { if (!cancelled) setEvents(data.events); })
+      .catch((err) => {
+        if (!cancelled) {
+          setEventsError(err?.message ?? 'Failed to load events.');
+        }
+      })
+      .finally(() => { if (!cancelled) setLoadingEvents(false); });
+
+    return () => { cancelled = true; };
+  }, [from, to, selectedUserId, roomId, user?.userId, rangeValid]);
 
   const fromInvalid = displayFrom.length === 10 && !displayToIso(displayFrom);
   const toInvalid   = displayTo.length === 10 && !displayToIso(displayTo);
@@ -211,7 +177,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
       </div>
 
       <p className="text-sm text-gray-500">
-        Export shifts to your calendar app for the selected date range.
+        Add your shifts directly to Google Calendar, Apple Calendar, Outlook, and more.
       </p>
 
       {/* Member picker */}
@@ -238,17 +204,22 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-gray-600">Date range</label>
-          {isCustomRange && (
-            <button onClick={() => goToWeek(currentWeekMonday)} className="text-xs text-blue-600 hover:underline">
-              Reset to this week
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {!isCurrentWeek || isCustomRange ? (
+              <button 
+                onClick={() => goToFullWeek(currentWeekStart)} 
+                className="text-xs text-blue-600 hover:underline"
+              >
+                {toDateStr(weekStart) === toDateStr(currentWeekStart) ? 'Full week' : 'This week'}
+              </button>
+            ) : null}
+          </div>
         </div>
 
         {/* Week navigation */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => goToWeek(addDays(weekMonday, -7))}
+            onClick={() => goToWeek(addDays(weekStart, -7))}
             className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
             title="Previous week"
           >
@@ -258,29 +229,28 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
           <span className="flex-1 text-center text-sm font-medium text-gray-800">
             {isCustomRange ? (
               <span className="text-gray-400 font-normal">Custom range</span>
-            ) : isCurrentWeek ? (
-              <span>This week <span className="text-gray-400 font-normal">({formatWeekLabel(weekMonday)})</span></span>
             ) : (
-              formatWeekLabel(weekMonday)
+              <span>
+                {getRelativeWeekLabel(weekStart)}{' '}
+                <span className="text-gray-400 font-normal">({formatWeekLabel(weekStart)})</span>
+              </span>
             )}
           </span>
 
+          <button onClick={handleToday} className="text-xs text-blue-600 hover:underline">
+            Today
+          </button>
+
           <button
-            onClick={() => goToWeek(addDays(weekMonday, 7))}
+            onClick={() => goToWeek(addDays(weekStart, 7))}
             className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
             title="Next week"
           >
             <ChevronRight className="w-4 h-4 text-gray-600" />
           </button>
-
-          {!isCurrentWeek && !isCustomRange && (
-            <button onClick={() => goToWeek(currentWeekMonday)} className="text-xs text-blue-600 hover:underline">
-              Today
-            </button>
-          )}
         </div>
 
-        {/* Manual date inputs — DD/MM/YYYY text + hidden date picker (same pattern as AdminPanel) */}
+        {/* Manual date inputs */}
         <div className="flex items-end gap-2">
           <div className="flex-1 space-y-0.5">
             <label className="text-xs text-gray-400" htmlFor="cal-from">From</label>
@@ -293,6 +263,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
                 onChange={(e) => handleDisplayFromChange(e.target.value)}
                 className={`w-full text-sm border rounded-lg px-3 py-1.5 pr-8 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${fromInvalid ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
               />
+              <CalendarDays className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
                 type="date"
                 value={from}
@@ -315,6 +286,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
                 onChange={(e) => handleDisplayToChange(e.target.value)}
                 className={`w-full text-sm border rounded-lg px-3 py-1.5 pr-8 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${toInvalid ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
               />
+              <CalendarDays className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               <input
                 type="date"
                 value={to}
@@ -330,41 +302,45 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
         )}
       </div>
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => { window.location.href = buildWebcalUrl(); }}
-          disabled={!rangeValid}
-          className="flex items-center gap-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <ExternalLink className="w-4 h-4" />
-          Add to Calendar
-        </button>
-
-        <button
-          onClick={handleCopy}
-          disabled={!rangeValid}
-          className="flex items-center gap-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-          {copied ? 'Copied!' : 'Copy link'}
-        </button>
-
-        <button
-          onClick={handleRegenerate}
-          disabled={regenerating}
-          title="Regenerate link — invalidates old subscriptions"
-          className="flex items-center gap-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
-          Regenerate link
-        </button>
-      </div>
-
-      <p className="text-xs text-gray-400">
-        Google Calendar on web: paste the link into{' '}
-        <span className="font-medium text-gray-500">Other calendars → From URL</span>.
-      </p>
+      {/* Calendar button / states */}
+      {rangeValid && (
+        <div className="pt-2">
+          {(loadingEvents || !selectedUserId) ? (
+            <div className="h-10 bg-gray-100 rounded-lg animate-pulse" />
+          ) : eventsError ? (
+            <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
+              <AlertCircle className="w-4 h-4" />
+              {eventsError}
+            </div>
+          ) : events.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-4 bg-gray-50 border border-dashed border-gray-200 rounded-xl space-y-1">
+              <CalendarDays className="w-6 h-6 text-gray-300" />
+              <p className="text-sm text-gray-400 font-medium">No shifts found for this range.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col space-y-3">
+              <div className="flex items-center gap-2 text-xs font-medium text-green-600 bg-green-50 px-3 py-1.5 rounded-full w-fit">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                {events.length} {events.length === 1 ? 'shift' : 'shifts'} found
+              </div>
+              <AddToCalendarButton
+                key={`${from}-${to}-${selectedUserId}`}
+                name={
+                  events.length === 1 
+                    ? events[0].name 
+                    : `${members.find(m => m.user_id === selectedUserId)?.user?.name || 'User'}'s Shifts`
+                }
+                dates={events}
+                options={['Apple', 'Google', 'iCal', 'Outlook.com', 'Yahoo']}
+                timeZone="Asia/Jerusalem"
+                buttonStyle="default"
+                listStyle="modal"
+                lightMode="system"
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
