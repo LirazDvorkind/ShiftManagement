@@ -215,7 +215,7 @@ export default function RoomPage() {
           </div>
           {schedule && room && (
           <ScheduleView
-            roomId={room.id}
+            roomId={id}
             schedule={schedule}
             members={members}
             isAdmin={currentUserRole === 'ADMIN'}
@@ -228,8 +228,8 @@ export default function RoomPage() {
 
         <section>
           {room && (
-            <CalendarExport 
-              roomId={room.id} 
+            <CalendarExport
+              roomId={id}
               members={members} 
               weekStart={weekStart} 
               onWeekChange={handleWeekChange} 
@@ -240,7 +240,7 @@ export default function RoomPage() {
         {currentUserRole === 'ADMIN' && room && (
           <section>
             <AdminPanel
-              roomId={room.id}
+              roomId={id}
               currentUserId={user?.userId ?? ''}
               locations={schedule?.locations ?? []}
               timeBlocks={schedule?.time_blocks ?? []}

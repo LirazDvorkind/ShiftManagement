@@ -16,8 +16,11 @@ const router = express.Router();
 // ---------------------------------------------------------------------------
 router.get("/events", authenticate, async (req, res, next) => {
   try {
-    const { roomId, userId: targetUserIdParam, from, to } = req.query;
-    if (!roomId) return res.status(400).json({ error: "roomId query parameter is required." });
+    const { roomId: roomIdParam, userId: targetUserIdParam, from, to } = req.query;
+    if (!roomIdParam) return res.status(400).json({ error: "roomId query parameter is required." });
+
+    const roomNumber = parseInt(roomIdParam, 10);
+    if (isNaN(roomNumber)) return res.status(404).json({ error: "Room not found." });
 
     const dateRe = /^\d{4}-\d{2}-\d{2}$/;
     if (from && !dateRe.test(from)) return res.status(400).json({ error: "Invalid 'from' date. Expected YYYY-MM-DD." });
@@ -28,7 +31,7 @@ router.get("/events", authenticate, async (req, res, next) => {
     const targetUserId = targetUserIdParam || requestingUserId;
 
     const room = await prisma.room.findUnique({
-      where: { id: roomId },
+      where: { number: roomNumber },
       include: { members: true },
     });
 
