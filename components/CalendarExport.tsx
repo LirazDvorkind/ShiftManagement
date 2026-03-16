@@ -21,16 +21,35 @@ const API_HOST =
     ? (process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') ?? window.location.origin)
     : '';
 
+// ── Date helpers ────────────────────────────────────────────────────────────
+
+/** "YYYY-MM-DD" → "DD/MM/YYYY" */
+function isoToDisplay(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+/** "DD/MM/YYYY" → "YYYY-MM-DD" (returns null if invalid) */
+function displayToIso(display: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(display);
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  return isNaN(new Date(iso).getTime()) ? null : iso;
+}
+
 function toDateStr(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function getWeekMonday(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
   return d;
 }
 
@@ -40,11 +59,15 @@ function addDays(date: Date, n: number): Date {
   return d;
 }
 
-function formatWeekLabel(monday: Date): string {
-  const sunday = addDays(monday, 6);
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-  return `${monday.toLocaleDateString(undefined, opts)} – ${sunday.toLocaleDateString(undefined, opts)}`;
+function fmtDate(date: Date): string {
+  return isoToDisplay(toDateStr(date));
 }
+
+function formatWeekLabel(monday: Date): string {
+  return `${fmtDate(monday)} – ${fmtDate(addDays(monday, 6))}`;
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export default function CalendarExport({ roomId, members }: CalendarExportProps) {
   const { user } = useAuth();
@@ -62,17 +85,27 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
   const [isCustomRange, setIsCustomRange] = useState(false);
 
   const isCurrentWeek = !isCustomRange && toDateStr(weekMonday) === toDateStr(currentWeekMonday);
-  const weekFrom = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
-  const weekTo = toDateStr(addDays(weekMonday, 6));
+  const defaultFrom = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
+  const defaultTo = toDateStr(addDays(weekMonday, 6));
 
-  const [from, setFrom] = useState<string>(weekFrom);
-  const [to, setTo] = useState<string>(weekTo);
+  // ISO values used in API URLs
+  const [from, setFrom] = useState(defaultFrom);
+  const [to, setTo]     = useState(defaultTo);
+  // Display values shown to the user (DD/MM/YYYY)
+  const [displayFrom, setDisplayFrom] = useState(isoToDisplay(defaultFrom));
+  const [displayTo,   setDisplayTo]   = useState(isoToDisplay(defaultTo));
 
-  // Sync from/to when week changes (but not when user has typed custom dates)
+  const rangeValid = !!from && !!to && from <= to;
+
+  // Sync when week navigation changes (not when user typed custom)
   useEffect(() => {
     if (!isCustomRange) {
-      setFrom(isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday));
-      setTo(toDateStr(addDays(weekMonday, 6)));
+      const f = isCurrentWeek ? toDateStr(today) : toDateStr(weekMonday);
+      const t = toDateStr(addDays(weekMonday, 6));
+      setFrom(f);
+      setTo(t);
+      setDisplayFrom(isoToDisplay(f));
+      setDisplayTo(isoToDisplay(t));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekMonday, isCustomRange]);
@@ -82,13 +115,29 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
     setIsCustomRange(false);
   }
 
-  function handleFromChange(val: string) {
-    setFrom(val);
+  function handleDisplayFromChange(val: string) {
+    setDisplayFrom(val);
+    setIsCustomRange(true);
+    const iso = displayToIso(val);
+    if (iso) setFrom(iso);
+  }
+
+  function handleDisplayToChange(val: string) {
+    setDisplayTo(val);
+    setIsCustomRange(true);
+    const iso = displayToIso(val);
+    if (iso) setTo(iso);
+  }
+
+  function handlePickerFromChange(iso: string) {
+    setFrom(iso);
+    setDisplayFrom(isoToDisplay(iso));
     setIsCustomRange(true);
   }
 
-  function handleToChange(val: string) {
-    setTo(val);
+  function handlePickerToChange(iso: string) {
+    setTo(iso);
+    setDisplayTo(isoToDisplay(iso));
     setIsCustomRange(true);
   }
 
@@ -105,9 +154,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
 
   function buildParams() {
     const params = new URLSearchParams({ roomId, from, to });
-    if (selectedUserId && selectedUserId !== user?.userId) {
-      params.set('userId', selectedUserId);
-    }
+    if (selectedUserId && selectedUserId !== user?.userId) params.set('userId', selectedUserId);
     return params.toString();
   }
 
@@ -152,6 +199,10 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
     return null;
   }
 
+  const fromInvalid = displayFrom.length === 10 && !displayToIso(displayFrom);
+  const toInvalid   = displayTo.length === 10 && !displayToIso(displayTo);
+  const orderInvalid = rangeValid === false && !!from && !!to;
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -183,15 +234,12 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
         </select>
       </div>
 
-      {/* Week picker */}
+      {/* Date range */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-gray-600">Date range</label>
           {isCustomRange && (
-            <button
-              onClick={() => goToWeek(currentWeekMonday)}
-              className="text-xs text-blue-600 hover:underline"
-            >
+            <button onClick={() => goToWeek(currentWeekMonday)} className="text-xs text-blue-600 hover:underline">
               Reset to this week
             </button>
           )}
@@ -211,10 +259,7 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
             {isCustomRange ? (
               <span className="text-gray-400 font-normal">Custom range</span>
             ) : isCurrentWeek ? (
-              <span>
-                This week{' '}
-                <span className="text-gray-400 font-normal">({formatWeekLabel(weekMonday)})</span>
-              </span>
+              <span>This week <span className="text-gray-400 font-normal">({formatWeekLabel(weekMonday)})</span></span>
             ) : (
               formatWeekLabel(weekMonday)
             )}
@@ -229,46 +274,68 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
           </button>
 
           {!isCurrentWeek && !isCustomRange && (
-            <button
-              onClick={() => goToWeek(currentWeekMonday)}
-              className="text-xs text-blue-600 hover:underline"
-            >
+            <button onClick={() => goToWeek(currentWeekMonday)} className="text-xs text-blue-600 hover:underline">
               Today
             </button>
           )}
         </div>
 
-        {/* Manual date inputs */}
-        <div className="flex items-center gap-2">
+        {/* Manual date inputs — DD/MM/YYYY text + hidden date picker (same pattern as AdminPanel) */}
+        <div className="flex items-end gap-2">
           <div className="flex-1 space-y-0.5">
             <label className="text-xs text-gray-400" htmlFor="cal-from">From</label>
-            <input
-              id="cal-from"
-              type="date"
-              value={from}
-              onChange={(e) => handleFromChange(e.target.value)}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <input
+                id="cal-from"
+                type="text"
+                placeholder="DD/MM/YYYY"
+                value={displayFrom}
+                onChange={(e) => handleDisplayFromChange(e.target.value)}
+                className={`w-full text-sm border rounded-lg px-3 py-1.5 pr-8 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${fromInvalid ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
+              />
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => handlePickerFromChange(e.target.value)}
+                className="absolute right-0 top-0 h-full w-8 opacity-0 cursor-pointer"
+              />
+            </div>
           </div>
-          <span className="text-gray-400 mt-4">–</span>
+
+          <span className="text-gray-400 pb-2">–</span>
+
           <div className="flex-1 space-y-0.5">
             <label className="text-xs text-gray-400" htmlFor="cal-to">To</label>
-            <input
-              id="cal-to"
-              type="date"
-              value={to}
-              onChange={(e) => handleToChange(e.target.value)}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <input
+                id="cal-to"
+                type="text"
+                placeholder="DD/MM/YYYY"
+                value={displayTo}
+                onChange={(e) => handleDisplayToChange(e.target.value)}
+                className={`w-full text-sm border rounded-lg px-3 py-1.5 pr-8 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 ${toInvalid ? 'border-red-400 bg-red-50' : 'border-gray-200'}`}
+              />
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => handlePickerToChange(e.target.value)}
+                className="absolute right-0 top-0 h-full w-8 opacity-0 cursor-pointer"
+              />
+            </div>
           </div>
         </div>
+
+        {orderInvalid && !fromInvalid && !toInvalid && (
+          <p className="text-xs text-red-500">"From" date must be on or before "To" date.</p>
+        )}
       </div>
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => { window.location.href = buildWebcalUrl(); }}
-          className="flex items-center gap-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          disabled={!rangeValid}
+          className="flex items-center gap-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ExternalLink className="w-4 h-4" />
           Add to Calendar
@@ -276,7 +343,8 @@ export default function CalendarExport({ roomId, members }: CalendarExportProps)
 
         <button
           onClick={handleCopy}
-          className="flex items-center gap-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors"
+          disabled={!rangeValid}
+          className="flex items-center gap-2 text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
           {copied ? 'Copied!' : 'Copy link'}

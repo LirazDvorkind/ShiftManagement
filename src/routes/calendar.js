@@ -8,6 +8,7 @@
  */
 
 const express = require("express");
+const { randomUUID } = require("crypto");
 const ical = require("ical-generator").default;
 const prisma = require("../lib/prisma");
 const authenticate = require("../middleware/authenticate");
@@ -25,7 +26,7 @@ router.get("/token", authenticate, async (req, res, next) => {
     if (!user.calendarToken) {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { calendarToken: crypto.randomUUID() },
+        data: { calendarToken: randomUUID() },
       });
     }
 
@@ -42,7 +43,7 @@ router.post("/token/regenerate", authenticate, async (req, res, next) => {
   try {
     const user = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { calendarToken: crypto.randomUUID() },
+      data: { calendarToken: randomUUID() },
     });
 
     res.json({ token: user.calendarToken });
@@ -66,6 +67,11 @@ router.get("/:calendarTokenFile", async (req, res, next) => {
 
     const { roomId, userId: targetUserIdParam, from, to } = req.query;
     if (!roomId) return res.status(400).json({ error: "roomId query parameter is required." });
+
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (from && !dateRe.test(from)) return res.status(400).json({ error: "Invalid 'from' date. Expected YYYY-MM-DD." });
+    if (to && !dateRe.test(to)) return res.status(400).json({ error: "Invalid 'to' date. Expected YYYY-MM-DD." });
+    if (from && to && from > to) return res.status(400).json({ error: "'from' date must not be after 'to' date." });
 
     // Authenticate via token
     const tokenUser = await prisma.user.findUnique({ where: { calendarToken } });

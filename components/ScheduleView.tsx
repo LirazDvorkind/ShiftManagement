@@ -68,13 +68,18 @@ function weekDates(weekStart: Date): string[] {
   });
 }
 
-/** Format week range as "Mar 10 – 16, 2026" */
+/** Format a Date as "DD/MM/YYYY" */
+function fmtDate(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${d.getFullYear()}`;
+}
+
+/** Format week range as "DD/MM/YYYY – DD/MM/YYYY" */
 function formatWeekRange(weekStart: Date): string {
   const end = new Date(weekStart);
   end.setDate(end.getDate() + 6);
-  const startStr = weekStart.toLocaleDateString('en-IL', { month: 'short', day: 'numeric', timeZone: TZ });
-  const endStr = end.toLocaleDateString('en-IL', { month: 'short', day: 'numeric', year: 'numeric', timeZone: TZ });
-  return `${startStr} – ${endStr}`;
+  return `${fmtDate(weekStart)} – ${fmtDate(end)}`;
 }
 
 /** Today as "YYYY-MM-DD" in Israel time */
@@ -208,7 +213,7 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                     {weekdayName(date)}
                   </span>
                   <span className={`text-xs ${isToday ? 'text-indigo-500' : 'text-gray-400'}`}>
-                    {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-IL', { month: 'short', day: 'numeric', timeZone: TZ })}
+                    {`${date.split('-')[2]}/${date.split('-')[1]}`}
                   </span>
                   {isToday && (
                     <span className="ml-auto text-[10px] font-semibold bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">
