@@ -74,7 +74,9 @@ router.get("/events", authenticate, async (req, res, next) => {
       const endDay = String(endDateObj.getDate()).padStart(2, "0");
 
       return {
-        name: `${timeBlock.name} @ ${shiftLocation.name}`,
+        name: targetUserId !== requestingUserId
+          ? `${targetUser.name} – ${timeBlock.name} @ ${shiftLocation.name}`
+          : `${timeBlock.name} @ ${shiftLocation.name}`,
         startDate: date,
         startTime: timeBlock.startTime,
         endDate: `${endYear}-${endMonth}-${endDay}`,
