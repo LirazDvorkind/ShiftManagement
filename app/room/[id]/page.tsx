@@ -22,6 +22,7 @@ import AdminPanel from '@/components/AdminPanel';
 import ScheduleView from '@/components/ScheduleView';
 import CalendarExport from '@/components/CalendarExport';
 import { Users, Layout, ShieldAlert, Loader2, LogOut, Copy, Check, AlertCircle } from 'lucide-react';
+import packageJson from '@/package.json';
 import { getWeekStart, todayStr } from '@/lib/dateUtils';
 
 export default function RoomPage() {
@@ -192,8 +193,9 @@ export default function RoomPage() {
                 </span>
               </div>
 
-              <span className="text-sm text-gray-600 hidden sm:block">
-                Signed in as <span className="font-medium text-gray-900">{user?.name}</span>
+              <span className="text-sm text-gray-600">
+                <span className="hidden sm:inline">Signed in as </span>
+                <span className="font-medium text-gray-900">{user?.name}</span>
               </span>
               <button
                 onClick={handleLogout}
@@ -255,7 +257,7 @@ export default function RoomPage() {
       </main>
 
       <footer className="py-12 border-t border-gray-200 text-center">
-        <p className="text-sm text-gray-400">ShiftManager &copy; 2026</p>
+        <p className="text-sm text-gray-400">ShiftManager &copy; {new Date().getFullYear()} &middot; v{packageJson.version}</p>
       </footer>
     </div>
   );
