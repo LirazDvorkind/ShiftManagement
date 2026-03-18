@@ -331,7 +331,7 @@ export default function CalendarExport({ roomId, members, weekStart, onWeekChang
                     : `${members.find(m => m.user_id === selectedUserId)?.user?.name || 'User'}'s Shifts`
                 }
                 description=""
-                dates={events}
+                dates={events.map(e => ({ ...e, description: '' }))}
                 options={['Apple', 'Google', 'iCal', 'Outlook.com', 'Yahoo']}
                 timeZone="Asia/Jerusalem"
                 buttonStyle="default"
