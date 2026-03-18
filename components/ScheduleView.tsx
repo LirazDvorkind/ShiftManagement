@@ -155,24 +155,25 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
       const fileName = `schedule-${dates[0]}-to-${dates[6]}.png`;
       const file = new File([blob], fileName, { type: 'image/png' });
 
-      // Mobile: use Web Share API with files (Android Chrome 89+, iOS Safari 15+)
-      const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+      // On narrow screens, prefer the native share sheet (works on all mobile browsers)
+      const isMobile = window.innerWidth <= 768;
       if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: 'Shift schedule' });
+          return;
         } catch (err: any) {
-          // User dismissed the share sheet — not an error
-          if (err?.name !== 'AbortError') throw err;
+          if (err?.name === 'AbortError') return; // user dismissed — not an error
+          // share failed for another reason — fall through to plain download
         }
-      } else {
-        // Desktop: trigger file download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
       }
+
+      // Plain download fallback (desktop + any mobile where share isn't available)
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Export failed:', err);
     } finally {
