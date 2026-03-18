@@ -81,7 +81,6 @@ router.get("/events", authenticate, async (req, res, next) => {
         startTime: timeBlock.startTime,
         endDate: `${endYear}-${endMonth}-${endDay}`,
         endTime: timeBlock.endTime,
-        location: shiftLocation.name,
       };
     });
 
