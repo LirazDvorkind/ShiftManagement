@@ -142,7 +142,7 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
     try {
       const html2canvas = (await import('html2canvas')).default;
       const canvas = await html2canvas(exportRef.current, {
-        background: '#ffffff',
+        backgroundColor: '#ffffff',
         scale: 2,
         useCORS: true,
         logging: false,
