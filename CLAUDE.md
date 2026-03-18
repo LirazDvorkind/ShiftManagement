@@ -1,5 +1,9 @@
 # Shift Management — Claude Repository Rules
 
+## Commit & Push (REQUIRED)
+
+Always **show the user the changes and wait for explicit confirmation** before running any `git commit` or `git push` command. Do not commit or push autonomously.
+
 ## Semver Version Bumping (REQUIRED on every commit)
 
 Before every commit, you **must** update the `version` field in `package.json` following these rules:

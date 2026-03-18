@@ -326,10 +326,11 @@ export default function CalendarExport({ roomId, members, weekStart, onWeekChang
               <AddToCalendarButton
                 key={`${from}-${to}-${selectedUserId}`}
                 name={
-                  events.length === 1 
-                    ? events[0].name 
+                  events.length === 1
+                    ? events[0].name
                     : `${members.find(m => m.user_id === selectedUserId)?.user?.name || 'User'}'s Shifts`
                 }
+                description=""
                 dates={events}
                 options={['Apple', 'Google', 'iCal', 'Outlook.com', 'Yahoo']}
                 timeZone="Asia/Jerusalem"
