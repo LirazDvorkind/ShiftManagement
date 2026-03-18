@@ -29,6 +29,26 @@ function getUserColor(index: number) {
   return USER_COLOR_CLASSES[index % USER_COLOR_CLASSES.length];
 }
 
+/** Shared pill used by both the visible grid and the export div.
+ *  Inline styles ensure html2canvas renders it identically to the browser. */
+function AssignmentPill({ name, location, hexBg, hexText, hexDot }: {
+  name: string;
+  location: string;
+  hexBg: string;
+  hexText: string;
+  hexDot: string;
+}) {
+  return (
+    <div style={{ backgroundColor: hexBg, color: hexText, borderRadius: '6px', padding: '4px 6px', fontSize: '10px', lineHeight: '1.4' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: hexDot, flexShrink: 0, display: 'inline-block', verticalAlign: 'middle' }} />
+        <span style={{ fontWeight: 600, lineHeight: '1.4' }}>{name}</span>
+      </div>
+      <div style={{ paddingLeft: '10px', opacity: 0.7, fontSize: '9px', lineHeight: '1.4' }}>{location}</div>
+    </div>
+  );
+}
+
 /** Format "YYYY-MM-DD" to "Mon, Mar 10" in Israel time */
 function formatDate(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -136,7 +156,8 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
       const file = new File([blob], fileName, { type: 'image/png' });
 
       // Mobile: use Web Share API with files (Android Chrome 89+, iOS Safari 15+)
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({ files: [file], title: 'Shift schedule' });
         } catch (err: any) {
@@ -297,30 +318,23 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                             const isRemoving = removingId === assignment.id;
 
                             return (
-                              <div
-                                key={assignment.id}
-                                className={`flex items-center md:items-start justify-between gap-2 md:gap-1 px-2 py-2 md:py-1 rounded-md text-sm md:text-xs ${color.bg} ${color.text} group`}
-                              >
-                                <div className="flex items-center gap-1.5 md:flex-col md:items-start md:gap-0 min-w-0">
-                                  <div className="flex items-center gap-1 min-w-0">
-                                    <span className={`w-2 h-2 md:w-1.5 md:h-1.5 rounded-full shrink-0 ${color.dot}`} />
-                                    <span className="font-medium truncate">
-                                      {assignment.user?.name || '—'}
-                                    </span>
-                                  </div>
-                                  <span className="opacity-30 shrink-0 md:hidden">·</span>
-                                  <span className="text-xs md:text-[10px] opacity-70 md:pl-2.5 truncate">
-                                    {assignment.location?.name || '—'}
-                                  </span>
-                                </div>
+                              <div key={assignment.id} className="relative group">
+                                <AssignmentPill
+                                  name={assignment.user?.name || '—'}
+                                  location={assignment.location?.name || '—'}
+                                  hexBg={color.hexBg}
+                                  hexText={color.hexText}
+                                  hexDot={color.hexDot}
+                                />
                                 {isAdmin && (
                                   <button
                                     onClick={() => handleRemove(assignment)}
                                     disabled={isRemoving}
-                                    className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-current hover:text-red-600 disabled:opacity-50 p-0.5 rounded"
+                                    className="absolute top-0.5 right-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity hover:text-red-600 disabled:opacity-50 p-0.5 rounded"
+                                    style={{ color: color.hexText }}
                                     title="Remove shift"
                                   >
-                                    <X className="w-4 h-4 md:w-3 md:h-3" />
+                                    <X className="w-3 h-3" />
                                   </button>
                                 )}
                               </div>
@@ -437,24 +451,14 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                                 const colorIdx = userColorMap.get(assignment.user_id) ?? 0;
                                 const color = getUserColor(colorIdx);
                                 return (
-                                  <div
+                                  <AssignmentPill
                                     key={assignment.id}
-                                    style={{
-                                      backgroundColor: color.hexBg,
-                                      color: color.hexText,
-                                      borderRadius: '6px',
-                                      padding: '4px 6px',
-                                      fontSize: '10px',
-                                    }}
-                                  >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color.hexDot, flexShrink: 0, display: 'inline-block' }} />
-                                      <span style={{ fontWeight: 600 }}>{assignment.user?.name || '—'}</span>
-                                    </div>
-                                    <div style={{ paddingLeft: '10px', opacity: 0.7, fontSize: '9px' }}>
-                                      {assignment.location?.name || '—'}
-                                    </div>
-                                  </div>
+                                    name={assignment.user?.name || '—'}
+                                    location={assignment.location?.name || '—'}
+                                    hexBg={color.hexBg}
+                                    hexText={color.hexText}
+                                    hexDot={color.hexDot}
+                                  />
                                 );
                               })}
                             </div>
@@ -486,9 +490,10 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                       color: color.hexText,
                       fontSize: '11px',
                       fontWeight: 500,
+                      lineHeight: '1.4',
                     }}
                   >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color.hexDot, display: 'inline-block' }} />
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color.hexDot, display: 'inline-block', verticalAlign: 'middle' }} />
                     {member.user?.name || member.user_id}
                   </div>
                 );
