@@ -5,24 +5,24 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { FullSchedule, ShiftAssignment, RoomMember } from '@/types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertCircle, Download } from 'lucide-react';
 import { api } from '@/lib/api';
 import { TZ, weekDates, todayStr, dateToDisplay, getWeekStart, getRelativeWeekLabel } from '@/lib/dateUtils';
 
-// 10 distinct user colors (bg, text, dot)
+// 10 distinct user colors (bg, text, dot, hex equivalents for the export div)
 const USER_COLOR_CLASSES = [
-  { bg: 'bg-blue-100',   text: 'text-blue-800',   dot: 'bg-blue-500'   },
-  { bg: 'bg-emerald-100',text: 'text-emerald-800', dot: 'bg-emerald-500' },
-  { bg: 'bg-violet-100', text: 'text-violet-800',  dot: 'bg-violet-500'  },
-  { bg: 'bg-orange-100', text: 'text-orange-800',  dot: 'bg-orange-500'  },
-  { bg: 'bg-rose-100',   text: 'text-rose-800',    dot: 'bg-rose-500'    },
-  { bg: 'bg-teal-100',   text: 'text-teal-800',    dot: 'bg-teal-500'    },
-  { bg: 'bg-amber-100',  text: 'text-amber-800',   dot: 'bg-amber-500'   },
-  { bg: 'bg-pink-100',   text: 'text-pink-800',    dot: 'bg-pink-500'    },
-  { bg: 'bg-cyan-100',   text: 'text-cyan-800',    dot: 'bg-cyan-500'    },
-  { bg: 'bg-lime-100',   text: 'text-lime-800',    dot: 'bg-lime-500'    },
+  { bg: 'bg-blue-100',   text: 'text-blue-800',   dot: 'bg-blue-500',   hexBg: '#dbeafe', hexText: '#1e40af', hexDot: '#3b82f6' },
+  { bg: 'bg-emerald-100',text: 'text-emerald-800', dot: 'bg-emerald-500', hexBg: '#d1fae5', hexText: '#065f46', hexDot: '#10b981' },
+  { bg: 'bg-violet-100', text: 'text-violet-800',  dot: 'bg-violet-500',  hexBg: '#ede9fe', hexText: '#4c1d95', hexDot: '#8b5cf6' },
+  { bg: 'bg-orange-100', text: 'text-orange-800',  dot: 'bg-orange-500',  hexBg: '#ffedd5', hexText: '#9a3412', hexDot: '#f97316' },
+  { bg: 'bg-rose-100',   text: 'text-rose-800',    dot: 'bg-rose-500',    hexBg: '#ffe4e6', hexText: '#9f1239', hexDot: '#f43f5e' },
+  { bg: 'bg-teal-100',   text: 'text-teal-800',    dot: 'bg-teal-500',    hexBg: '#ccfbf1', hexText: '#134e4a', hexDot: '#14b8a6' },
+  { bg: 'bg-amber-100',  text: 'text-amber-800',   dot: 'bg-amber-500',   hexBg: '#fef3c7', hexText: '#92400e', hexDot: '#f59e0b' },
+  { bg: 'bg-pink-100',   text: 'text-pink-800',    dot: 'bg-pink-500',    hexBg: '#fce7f3', hexText: '#9d174d', hexDot: '#ec4899' },
+  { bg: 'bg-cyan-100',   text: 'text-cyan-800',    dot: 'bg-cyan-500',    hexBg: '#cffafe', hexText: '#164e63', hexDot: '#06b6d4' },
+  { bg: 'bg-lime-100',   text: 'text-lime-800',    dot: 'bg-lime-500',    hexBg: '#ecfccb', hexText: '#3f6212', hexDot: '#84cc16' },
 ];
 
 function getUserColor(index: number) {
@@ -55,6 +55,13 @@ function formatWeekRange(weekStart: Date): React.ReactNode {
   );
 }
 
+/** Plain-text version of the week range for the export header */
+function formatWeekRangeText(weekStart: Date): string {
+  const end = new Date(weekStart);
+  end.setDate(end.getDate() + 6);
+  return `${getRelativeWeekLabel(weekStart)}  (${dateToDisplay(weekStart)} – ${dateToDisplay(end)})`;
+}
+
 interface ScheduleViewProps {
   roomId: string;
   schedule: FullSchedule;
@@ -70,6 +77,10 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  // Ref for the hidden export-only div
+  const exportRef = useRef<HTMLDivElement>(null);
 
   // Build userId → color index map (stable, based on member order)
   const userColorMap = new Map<string, number>();
@@ -102,6 +113,49 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
       setRemoveError(err.message || 'Failed to remove shift. Please try again.');
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const handleExportImage = async () => {
+    if (!exportRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(exportRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Failed to create image'))), 'image/png')
+      );
+
+      const fileName = `schedule-${dates[0]}-to-${dates[6]}.png`;
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      // Mobile: use Web Share API with files (Android Chrome 89+, iOS Safari 15+)
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Shift schedule' });
+        } catch (err: any) {
+          // User dismissed the share sheet — not an error
+          if (err?.name !== 'AbortError') throw err;
+        }
+      } else {
+        // Desktop: trigger file download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err: any) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -142,12 +196,27 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
             {formatWeekRange(weekStart)}
           </span>
         </div>
-        <button
-          onClick={goToday}
-          className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shrink-0"
-        >
-          Today
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={goToday}
+            className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Today
+          </button>
+          <button
+            onClick={handleExportImage}
+            disabled={exporting}
+            title="Save week as image"
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {exporting ? (
+              <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{exporting ? 'Saving…' : 'Save image'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Remove error */}
@@ -206,7 +275,6 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
               {/* Assignments grouped by time block */}
               {dayAssignments.length === 0 ? (
-                // On desktop show a placeholder dash; on mobile the date header is enough
                 <p className="hidden md:block text-xs text-gray-300 italic">—</p>
               ) : (
                 <div className="space-y-2">
@@ -216,7 +284,6 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
                     return (
                       <div key={block.id}>
-                        {/* Time block label — slightly larger on mobile where we have full width */}
                         <p className="text-xs md:text-[10px] font-semibold text-gray-500 md:text-gray-400 uppercase tracking-wide mb-1.5 md:mb-1">
                           {block.name}
                           <span className="font-normal normal-case ml-1 text-gray-400 md:text-gray-300">
@@ -234,10 +301,6 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                                 key={assignment.id}
                                 className={`flex items-center md:items-start justify-between gap-2 md:gap-1 px-2 py-2 md:py-1 rounded-md text-sm md:text-xs ${color.bg} ${color.text} group`}
                               >
-                                {/*
-                                  Mobile: single inline row — "● Name · Location"
-                                  Desktop: stacked — name on top, location below
-                                */}
                                 <div className="flex items-center gap-1.5 md:flex-col md:items-start md:gap-0 min-w-0">
                                   <div className="flex items-center gap-1 min-w-0">
                                     <span className={`w-2 h-2 md:w-1.5 md:h-1.5 rounded-full shrink-0 ${color.dot}`} />
@@ -254,7 +317,6 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
                                   <button
                                     onClick={() => handleRemove(assignment)}
                                     disabled={isRemoving}
-                                    // Always visible on touch (no hover); fade in on desktop hover
                                     className="shrink-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-current hover:text-red-600 disabled:opacity-50 p-0.5 rounded"
                                     title="Remove shift"
                                   >
@@ -294,6 +356,147 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
           })}
         </div>
       )}
+
+      {/*
+        Hidden export-only div — positioned fixed off-screen so it:
+        - Is always laid out at full desktop width (html2canvas requires a laid-out element)
+        - Never causes scrollbars (fixed elements don't contribute to scroll dimensions)
+        - Is never interactive (pointer-events: none)
+        - Is invisible and inaccessible to screen readers (aria-hidden)
+      */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: '-9999px',
+          pointerEvents: 'none',
+          width: '1120px',
+        }}
+      >
+        <div ref={exportRef} style={{ backgroundColor: '#ffffff', padding: '32px', fontFamily: 'system-ui, sans-serif' }}>
+          {/* Export header */}
+          <div style={{ marginBottom: '20px' }}>
+            <p style={{ fontSize: '20px', fontWeight: 700, color: '#1f2937', margin: 0 }}>
+              Shift Schedule
+            </p>
+            <p style={{ fontSize: '14px', color: '#6b7280', margin: '4px 0 0' }}>
+              {formatWeekRangeText(weekStart)}
+            </p>
+          </div>
+
+          {/* 7-column grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px' }}>
+            {dates.map((date) => {
+              const isToday = date === today;
+              const dayAssignments = assignments.filter(a => a.date === date);
+
+              return (
+                <div
+                  key={date}
+                  style={{
+                    borderRadius: '12px',
+                    border: `1px solid ${isToday ? '#a5b4fc' : '#e5e7eb'}`,
+                    backgroundColor: isToday ? '#eef2ff' : '#ffffff',
+                    padding: '12px',
+                    minHeight: '160px',
+                  }}
+                >
+                  {/* Day header */}
+                  <div style={{ marginBottom: '8px' }}>
+                    <p style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: isToday ? '#4f46e5' : '#9ca3af', margin: 0 }}>
+                      {weekdayName(date).slice(0, 3)}
+                    </p>
+                    <p style={{ fontSize: '22px', fontWeight: 700, lineHeight: 1, color: isToday ? '#4338ca' : '#1f2937', margin: '2px 0 0' }}>
+                      {date.split('-')[2]}
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#9ca3af', margin: '2px 0 0' }}>
+                      {new Date(date.replace(/-/g, '/')).toLocaleDateString('en-IL', { month: 'short', timeZone: TZ })}
+                    </p>
+                  </div>
+
+                  {/* Assignments */}
+                  {dayAssignments.length === 0 ? (
+                    <p style={{ fontSize: '11px', color: '#d1d5db', fontStyle: 'italic' }}>—</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {time_blocks.map(block => {
+                        const blockAssignments = dayAssignments.filter(a => a.time_block_id === block.id);
+                        if (blockAssignments.length === 0) return null;
+
+                        return (
+                          <div key={block.id}>
+                            <p style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6b7280', margin: '0 0 4px' }}>
+                              {block.name}{' '}
+                              <span style={{ fontWeight: 400, textTransform: 'none', color: '#9ca3af' }}>
+                                {block.start_time}–{block.end_time}
+                              </span>
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {blockAssignments.map(assignment => {
+                                const colorIdx = userColorMap.get(assignment.user_id) ?? 0;
+                                const color = getUserColor(colorIdx);
+                                return (
+                                  <div
+                                    key={assignment.id}
+                                    style={{
+                                      backgroundColor: color.hexBg,
+                                      color: color.hexText,
+                                      borderRadius: '6px',
+                                      padding: '4px 6px',
+                                      fontSize: '10px',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color.hexDot, flexShrink: 0, display: 'inline-block' }} />
+                                      <span style={{ fontWeight: 600 }}>{assignment.user?.name || '—'}</span>
+                                    </div>
+                                    <div style={{ paddingLeft: '10px', opacity: 0.7, fontSize: '9px' }}>
+                                      {assignment.location?.name || '—'}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          {members.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '20px' }}>
+              {members.map((member, i) => {
+                const color = getUserColor(i);
+                return (
+                  <div
+                    key={member.user_id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 10px',
+                      borderRadius: '9999px',
+                      backgroundColor: color.hexBg,
+                      color: color.hexText,
+                      fontSize: '11px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: color.hexDot, display: 'inline-block' }} />
+                    {member.user?.name || member.user_id}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
