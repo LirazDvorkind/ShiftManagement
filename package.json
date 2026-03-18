@@ -1,6 +1,6 @@
 {
   "name": "shift-management",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "concurrently --names \"API,WEB\" --prefix-colors \"cyan,magenta\" \"npm run dev:api\" \"npm run dev:web\"",
@@ -23,6 +23,7 @@
     "express": "^4.19.2",
     "express-validator": "^7.1.0",
     "helmet": "^7.1.0",
+    "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.378.0",
     "next": "^14.2.3",
@@ -30,6 +31,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/html2canvas": "^0.5.35",
     "@types/node": "^20.12.12",
     "@types/react": "^18.3.2",
     "@types/react-dom": "^18.3.0",
