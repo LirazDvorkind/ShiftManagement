@@ -97,7 +97,8 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
 
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState('');
-  const [exporting, setExporting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   // Ref for the hidden export-only div
   const exportRef = useRef<HTMLDivElement>(null);
@@ -151,37 +152,63 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
     return { blob, fileName };
   };
 
+  /** Triggers a file download/open across all browsers.
+   *  - Appends anchor to DOM (required by Firefox + iOS Safari for programmatic clicks)
+   *  - Delays URL revocation so the browser has time to start the fetch
+   */
+  const triggerDownload = (blob: Blob, fileName: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  };
+
   const handleShare = async () => {
-    if (!exportRef.current || exporting) return;
-    setExporting(true);
+    if (!exportRef.current || sharing) return;
+    setSharing(true);
     try {
       const { blob, fileName } = await buildImageBlob();
       const file = new File([blob], fileName, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Shift schedule' });
+
+      // canShare({ files }) throws on Firefox desktop and some Android browsers
+      let canShareFiles = false;
+      try {
+        canShareFiles = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+      } catch { /* unsupported — fall through to download */ }
+
+      if (canShareFiles) {
+        try {
+          await navigator.share({ files: [file], title: 'Shift schedule' });
+          return; // success
+        } catch (err: any) {
+          if (err?.name === 'AbortError') return; // user cancelled — don't fall back
+          // NotAllowedError (iOS gesture lost after await) or anything else → fall through
+        }
       }
+
+      // Fallback: download / open in browser (iOS lets user long-press → Save to Photos)
+      triggerDownload(blob, fileName);
     } catch (err: any) {
-      if (err?.name !== 'AbortError') console.error('Share failed:', err);
+      console.error('Share failed:', err);
     } finally {
-      setExporting(false);
+      setSharing(false);
     }
   };
 
   const handleDownload = async () => {
-    if (!exportRef.current || exporting) return;
-    setExporting(true);
+    if (!exportRef.current || downloading) return;
+    setDownloading(true);
     try {
       const { blob, fileName } = await buildImageBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerDownload(blob, fileName);
     } catch (err: any) {
       console.error('Download failed:', err);
     } finally {
-      setExporting(false);
+      setDownloading(false);
     }
   };
 
@@ -231,11 +258,11 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
           </button>
           <button
             onClick={handleShare}
-            disabled={exporting}
+            disabled={sharing}
             title="Share schedule image"
             className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            {exporting ? (
+            {sharing ? (
               <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin block" />
             ) : (
               <Share2 className="w-4 h-4" />
@@ -243,11 +270,11 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
           </button>
           <button
             onClick={handleDownload}
-            disabled={exporting}
+            disabled={downloading}
             title="Download schedule image"
             className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            {exporting ? (
+            {downloading ? (
               <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin block" />
             ) : (
               <Download className="w-4 h-4" />
