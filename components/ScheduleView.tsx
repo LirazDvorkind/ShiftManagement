@@ -7,7 +7,7 @@
 
 import { useState, useRef } from 'react';
 import { FullSchedule, ShiftAssignment, RoomMember } from '@/types';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertCircle, Download } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, AlertCircle, Download, Share2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { TZ, weekDates, todayStr, dateToDisplay, getWeekStart, getRelativeWeekLabel } from '@/lib/dateUtils';
 
@@ -136,38 +136,42 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
     }
   };
 
-  const handleExportImage = async () => {
+  const buildImageBlob = async (): Promise<{ blob: Blob; fileName: string }> => {
+    const html2canvas = (await import('html2canvas')).default;
+    const canvas = await html2canvas(exportRef.current!, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+    const blob = await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Failed to create image'))), 'image/png')
+    );
+    const fileName = `schedule-${dates[0]}-to-${dates[6]}.png`;
+    return { blob, fileName };
+  };
+
+  const handleShare = async () => {
     if (!exportRef.current || exporting) return;
     setExporting(true);
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(exportRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 2,
-        useCORS: true,
-        logging: false,
-      });
-
-      const blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Failed to create image'))), 'image/png')
-      );
-
-      const fileName = `schedule-${dates[0]}-to-${dates[6]}.png`;
+      const { blob, fileName } = await buildImageBlob();
       const file = new File([blob], fileName, { type: 'image/png' });
-
-      // On narrow screens, prefer the native share sheet (works on all mobile browsers)
-      const isMobile = window.innerWidth <= 768;
-      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: 'Shift schedule' });
-          return;
-        } catch (err: any) {
-          if (err?.name === 'AbortError') return; // user dismissed — not an error
-          // share failed for another reason — fall through to plain download
-        }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Shift schedule' });
       }
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') console.error('Share failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
-      // Plain download fallback (desktop + any mobile where share isn't available)
+  const handleDownload = async () => {
+    if (!exportRef.current || exporting) return;
+    setExporting(true);
+    try {
+      const { blob, fileName } = await buildImageBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -175,7 +179,7 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      console.error('Export failed:', err);
+      console.error('Download failed:', err);
     } finally {
       setExporting(false);
     }
@@ -226,17 +230,28 @@ export default function ScheduleView({ roomId, schedule, members, isAdmin, onRef
             Today
           </button>
           <button
-            onClick={handleExportImage}
+            onClick={handleShare}
             disabled={exporting}
-            title="Save week as image"
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            title="Share schedule image"
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             {exporting ? (
-              <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin block" />
+            ) : (
+              <Share2 className="w-4 h-4" />
+            )}
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={exporting}
+            title="Download schedule image"
+            className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            {exporting ? (
+              <span className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin block" />
             ) : (
               <Download className="w-4 h-4" />
             )}
-            <span className="hidden sm:inline">{exporting ? 'Saving…' : 'Save image'}</span>
           </button>
         </div>
       </div>
